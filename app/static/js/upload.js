@@ -47,9 +47,9 @@ uploadForm.addEventListener("submit", async e => {
     if (!exp.ok) throw new Error(info.detail || "数据读取失败");
 
     renderOverview(data.file_id, info);
-    showStatus("✅ 数据读取成功，可进行下一步", "info");
+    showStatus("数据读取成功，可进行下一步", "info");
   } catch (err) {
-    showStatus("❌ " + err.message, "error");
+    showStatus("失败：" + err.message, "error");
   } finally {
     uploadBtn.disabled = false;
     uploadBtn.textContent = "上传并探查数据";
@@ -76,7 +76,7 @@ function renderOverview(fileId, info) {
       <td>${c.missing}</td>
       <td>${(c.missing_rate * 100).toFixed(1)}%</td>
       <td>${c.unique}</td>
-      <td>${c.is_id_like ? "⚠️ 是" : "否"}</td>
+      <td>${c.is_id_like ? "是(疑似ID)" : "否"}</td>
     </tr>`).join("");
 
   // 预览表（动态表头）

@@ -1,4 +1,4 @@
-/* ===== 结果展示页逻辑：加载结果 → 渲染模型对比/图表/下载 ===== */
+/* ===== 结果展示页逻辑：加载结果 -> 渲染模型对比/图表/下载 ===== */
 
 const resultCard = document.getElementById("resultCard");
 const emptyCard = document.getElementById("emptyCard");
@@ -77,7 +77,7 @@ function render(r) {
   modelHead.innerHTML = `<th>模型</th>${headers.map(h => `<th>${h}</th>`).join("")}`;
   modelBody.innerHTML = r.models.map(m => `
     <tr class="${m.name === r.best_model.name ? "best-row" : ""}">
-      <td>${esc(m.name)}${m.name === r.best_model.name ? " 🏆" : ""}</td>
+      <td>${esc(m.name)}${m.name === r.best_model.name ? " [最优]" : ""}</td>
       ${headers.map(h => `<td>${m.metrics[h] ?? "—"}</td>`).join("")}
     </tr>`).join("");
 

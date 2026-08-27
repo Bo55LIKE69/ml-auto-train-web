@@ -1,4 +1,4 @@
-/* ===== 标签选择页逻辑：加载概览 → 配置任务 → 触发训练 ===== */
+/* ===== 标签选择页逻辑：加载概览 -> 配置任务 -> 触发训练 ===== */
 
 const targetSelect = document.getElementById("targetSelect");
 const taskType = document.getElementById("taskType");
@@ -40,9 +40,9 @@ async function loadOverview() {
 
     // 风险提示（缺失严重 / 样本过少）
     const warns = [];
-    if (info.n_samples < 100) warns.push(`⚠ 样本数仅 ${info.n_samples}，结果可靠性有限`);
+    if (info.n_samples < 100) warns.push(`[提示] 样本数仅 ${info.n_samples}，结果可靠性有限`);
     const heavy = info.columns.filter(c => c.missing_rate > 0.3);
-    if (heavy.length) warns.push(`⚠ ${heavy.length} 列缺失率超过 30%（${heavy.map(c => c.name).join("、")}）`);
+    if (heavy.length) warns.push(`[提示] ${heavy.length} 列缺失率超过 30%（${heavy.map(c => c.name).join("、")}）`);
     if (warns.length) { warnBox.hidden = false; warnBox.textContent = warns.join("\n"); }
   } catch (err) {
     targetSelect.innerHTML = `<option value="">${esc(err.message)}</option>`;
@@ -57,7 +57,7 @@ configForm.addEventListener("submit", async e => {
 
   trainBtn.disabled = true;
   trainBtn.innerHTML = '<span class="spinner"></span>训练中（多模型对比，约需几秒~几十秒）…';
-  showStatus("正在执行：预处理 → 多模型训练 → 评估 → 绘图 → 生成报告…", "info");
+  showStatus("正在执行：预处理 -> 多模型训练 -> 评估 -> 绘图 -> 生成报告…", "info");
 
   const idCols = [...document.querySelectorAll("#idColsBox input:checked")].map(i => i.value);
   try {
@@ -73,9 +73,9 @@ configForm.addEventListener("submit", async e => {
     localStorage.setItem("ml_last_task_id", data.task_id);
     location.href = `/result.html?task_id=${data.task_id}`;
   } catch (err) {
-    showStatus("❌ " + err.message, "error");
+    showStatus("失败：" + err.message, "error");
     trainBtn.disabled = false;
-    trainBtn.textContent = "🚀 开始自动训练";
+    trainBtn.textContent = "开始自动训练";
   }
 });
 

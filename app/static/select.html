@@ -9,7 +9,7 @@
 <body>
 <header class="navbar">
   <div class="nav-inner">
-    <span class="logo">📊 表格ML自动训练工具</span>
+    <span class="logo">表格ML自动训练工具</span>
     <nav>
       <a href="/">上传数据</a>
       <a href="/select.html" class="active">选择标签</a>
@@ -25,7 +25,7 @@
 
     <form id="configForm">
       <div class="field">
-        <label for="targetSelect">🎯 目标标签列 <span class="req">*</span></label>
+        <label for="targetSelect">目标标签列 <span class="req">*</span></label>
         <select id="targetSelect" required>
           <option value="">-- 加载中 --</option>
         </select>
@@ -39,11 +39,11 @@
           <option value="classification">分类</option>
           <option value="regression">回归</option>
         </select>
-        <p class="hint">自动判断规则：数值型目标且取值数&gt;20 → 回归，否则分类</p>
+        <p class="hint">自动判断规则：数值型目标且取值数&gt;20 -> 回归，否则分类</p>
       </div>
 
       <div class="field">
-        <label>🗑️ 剔除无意义列（ID/编号等，可多选）</label>
+        <label>剔除无意义列（ID/编号等，可多选）</label>
         <div id="idColsBox" class="checkbox-group">
           <p class="hint">加载中…</p>
         </div>
@@ -51,7 +51,7 @@
 
       <div id="warnBox" class="warn" hidden></div>
 
-      <button type="submit" class="btn-primary btn-block" id="trainBtn">🚀 开始自动训练</button>
+      <button type="submit" class="btn-primary btn-block" id="trainBtn">开始自动训练</button>
       <div id="trainStatus" class="status" hidden></div>
     </form>
   </section>
