@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>表格ML自动训练工具 - 上传数据</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="navbar">
+  <div class="nav-inner">
+    <span class="logo">📊 表格ML自动训练工具</span>
+    <nav>
+      <a href="/" class="active">上传数据</a>
+      <a href="/select.html">选择标签</a>
+      <a href="/result.html">实验结果</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+  <section class="card">
+    <h1>上传数据集</h1>
+    <p class="subtitle">支持 CSV / XLSX / XLS，最大 50MB。上传后自动读取并展示数据概览。</p>
+
+    <form id="uploadForm">
+      <div id="dropZone" class="drop-zone">
+        <p class="dz-icon">📁</p>
+        <p>点击选择文件，或将文件拖拽到此处</p>
+        <p class="dz-hint" id="fileHint">未选择文件</p>
+      </div>
+      <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" hidden>
+      <button type="submit" class="btn-primary" id="uploadBtn">上传并探查数据</button>
+    </form>
+
+    <div id="uploadStatus" class="status" hidden></div>
+  </section>
+
+  <section class="card" id="overviewCard" hidden>
+    <h2>数据集概览</h2>
+    <div id="overviewStats" class="stats-grid"></div>
+    <h3>列信息</h3>
+    <div class="table-wrap">
+      <table id="colTable">
+        <thead>
+          <tr><th>列名</th><th>类型</th><th>缺失数</th><th>缺失率</th><th>唯一值</th><th>疑似ID</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <h3>数据预览（前5行）</h3>
+    <div class="table-wrap table-scroll">
+      <table id="previewTable"><thead></thead><tbody></tbody></table>
+    </div>
+    <div class="btn-row">
+      <a href="/select.html?file_id=__FILE_ID__" id="goSelectBtn" class="btn-primary">下一步：选择目标标签 →</a>
+    </div>
+  </section>
+</main>
+
+<script src="/js/upload.js"></script>
+</body>
+</html>

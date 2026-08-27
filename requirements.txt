@@ -1,0 +1,25 @@
+# ==================== Dependencies ====================
+# Python 3.10 ~ 3.12 (64-bit) recommended
+# Install: pip install -r requirements.txt
+# Faster mirror: pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# ---- Web backend ----
+fastapi==0.115.6            # API framework with built-in Swagger docs
+uvicorn[standard]==0.32.1   # ASGI server ([standard] enables --reload)
+python-multipart==0.0.19    # REQUIRED for FastAPI UploadFile parsing
+
+# ---- Data processing ----
+pandas==2.2.3
+numpy==1.26.4
+openpyxl==3.1.5             # required to read .xlsx
+xlrd==2.0.1                 # required to read legacy .xls
+
+# ---- Machine learning (native sklearn, no AutoML libs) ----
+scikit-learn==1.5.2
+
+# ---- Visualization ----
+matplotlib==3.9.2
+
+# ---- Testing ----
+pytest==8.3.4
+httpx==0.28.1               # runtime dependency of FastAPI TestClient

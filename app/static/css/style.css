@@ -1,0 +1,150 @@
+/* ===== 全局样式：表格ML自动训练工具 ===== */
+:root {
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --bg: #f1f5f9;
+  --card: #ffffff;
+  --text: #1e293b;
+  --text-2: #64748b;
+  --border: #e2e8f0;
+  --warn-bg: #fef3c7;
+  --warn-border: #f59e0b;
+  --best-bg: #ecfdf5;
+  --best-border: #10b981;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* 顶部导航 */
+.navbar { background: var(--card); border-bottom: 1px solid var(--border); }
+.nav-inner {
+  max-width: 1080px; margin: 0 auto; padding: 14px 20px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.logo { font-size: 18px; font-weight: 700; }
+nav a {
+  margin-left: 18px; color: var(--text-2); text-decoration: none; font-size: 14px;
+  padding: 6px 10px; border-radius: 6px; transition: all .15s;
+}
+nav a:hover { color: var(--primary); background: #eff6ff; }
+nav a.active { color: var(--primary); font-weight: 600; background: #eff6ff; }
+
+/* 布局 */
+.container { max-width: 1080px; margin: 28px auto; padding: 0 20px; }
+.container.narrow { max-width: 720px; }
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 26px 30px; margin-bottom: 22px; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+h1 { font-size: 24px; margin-bottom: 6px; }
+h2 { font-size: 19px; margin: 22px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+h3 { font-size: 15px; margin: 16px 0 8px; color: var(--text-2); }
+.subtitle { color: var(--text-2); font-size: 14px; margin-bottom: 18px; }
+
+/* 上传拖拽区 */
+.drop-zone {
+  border: 2px dashed var(--border); border-radius: 10px; padding: 40px 20px;
+  text-align: center; color: var(--text-2); cursor: pointer; transition: all .2s;
+  background: #f8fafc;
+}
+.drop-zone:hover, .drop-zone.dragover { border-color: var(--primary); background: #eff6ff; }
+.dz-icon { font-size: 40px; margin-bottom: 6px; }
+.dz-hint { font-size: 13px; color: var(--primary); margin-top: 6px; font-weight: 600; }
+
+/* 按钮 */
+.btn-primary, .btn-secondary, .btn-ghost {
+  display: inline-block; border: none; border-radius: 8px; cursor: pointer;
+  font-size: 15px; padding: 11px 22px; text-decoration: none; text-align: center;
+  transition: all .15s;
+}
+.btn-primary { background: var(--primary); color: #fff; font-weight: 600; }
+.btn-primary:hover { background: var(--primary-dark); }
+.btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+.btn-secondary {
+  background: #fff; color: var(--primary); border: 1.5px solid var(--primary);
+  font-weight: 600; margin-right: 10px;
+}
+.btn-secondary:hover { background: #eff6ff; }
+.btn-ghost { background: transparent; color: var(--text-2); }
+.btn-ghost:hover { color: var(--primary); }
+.btn-block { width: 100%; margin-top: 10px; }
+.btn-row { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* 表单 */
+.field { margin-bottom: 18px; }
+.field label { display: block; font-weight: 600; margin-bottom: 6px; }
+.req { color: #ef4444; }
+select, input[type="text"] {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 15px; background: #fff; color: var(--text);
+}
+select:focus, input:focus { outline: 2px solid #bfdbfe; border-color: var(--primary); }
+.hint { font-size: 12.5px; color: var(--text-2); margin-top: 5px; }
+.checkbox-group { display: flex; flex-wrap: wrap; gap: 10px; }
+.checkbox-group label {
+  display: inline-flex; align-items: center; gap: 6px; font-weight: 400;
+  border: 1px solid var(--border); border-radius: 20px; padding: 6px 14px;
+  background: #f8fafc; cursor: pointer; font-size: 14px;
+}
+.checkbox-group label:has(input:checked) { background: #eff6ff; border-color: var(--primary); color: var(--primary); }
+.inline-form { display: flex; gap: 10px; margin: 14px 0; }
+.inline-form input { flex: 1; }
+
+/* 状态提示 */
+.status { margin-top: 14px; padding: 10px 14px; border-radius: 8px; font-size: 14px; }
+.status.error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.status.info { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.warn {
+  background: var(--warn-bg); border: 1px solid var(--warn-border); color: #92400e;
+  border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: 14px; white-space: pre-line;
+}
+
+/* 统计格子 */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 12px 0; }
+.stat-box {
+  background: #f8fafc; border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px; text-align: center;
+}
+.stat-box .num { font-size: 22px; font-weight: 700; color: var(--primary); }
+.stat-box .lbl { font-size: 12.5px; color: var(--text-2); margin-top: 2px; }
+
+/* 表格 */
+.table-wrap { overflow-x: auto; margin: 10px 0; }
+.table-scroll { max-height: 260px; overflow-y: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 9px 12px; border: 1px solid var(--border); text-align: left; white-space: nowrap; }
+th { background: #f1f5f9; font-weight: 600; }
+tbody tr:hover { background: #f8fafc; }
+tr.best-row { background: var(--best-bg); font-weight: 600; }
+
+/* 徽章与最优框 */
+.badge {
+  display: inline-block; background: #eff6ff; color: var(--primary);
+  border-radius: 20px; padding: 3px 12px; font-size: 13px; margin-left: 8px;
+}
+.badge-gray { background: #f1f5f9; color: var(--text-2); }
+.result-head { display: flex; align-items: center; flex-wrap: wrap; }
+.best {
+  background: var(--best-bg); border: 1px solid var(--best-border); border-radius: 10px;
+  padding: 14px 18px; margin-top: 12px; font-size: 15px;
+}
+.best b { color: #047857; font-size: 16px; }
+
+/* 图表区 */
+.plot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+.plot-card { background: #fafafa; border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.plot-card img { width: 100%; border-radius: 6px; }
+.plot-card p { text-align: center; font-size: 13.5px; color: var(--text-2); margin-top: 8px; }
+
+/* 加载动画 */
+.spinner {
+  display: inline-block; width: 16px; height: 16px; border: 3px solid #bfdbfe;
+  border-top-color: var(--primary); border-radius: 50%;
+  animation: spin .8s linear infinite; vertical-align: -3px; margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
