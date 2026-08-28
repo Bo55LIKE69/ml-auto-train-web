@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>表格ML自动训练工具 - 实验工作台</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="navbar">
+  <div class="nav-inner">
+    <span class="logo"><span class="logo-mark"></span>表格ML自动训练工具</span>
+    <nav class="stepper">
+      <a class="step" href="/"><span class="step-num">01</span><span class="step-label">上传数据</span></a>
+      <span class="step-line"></span>
+      <a class="step" href="/select.html"><span class="step-num">02</span><span class="step-label">选择标签</span></a>
+      <span class="step-line"></span>
+      <a class="step" href="/result.html"><span class="step-num">03</span><span class="step-label">实验结果</span></a>
+    </nav>
+  </div>
+</header>
+
+<main class="container narrow">
+  <section class="card">
+    <p class="eyebrow">WORKSPACE</p>
+    <h1>实验工作台</h1>
+    <p class="subtitle">查看历史训练任务、对比实验结果、下载报告。新实验请从「上传数据」开始。</p>
+
+    <div class="btn-row" style="margin-top:0">
+      <a href="/" class="btn-primary">+ 新建训练任务</a>
+    </div>
+
+    <h2>历史任务 <span class="badge badge-gray" id="taskCount">0</span></h2>
+    <div class="table-wrap">
+      <table id="taskTable">
+        <thead>
+          <tr>
+            <th>任务 ID</th><th>目标标签</th><th>类型</th><th>最优模型</th>
+            <th>得分</th><th>样本</th><th>耗时</th><th>时间</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="hint" id="emptyHint" hidden>暂无历史任务。先去 <a href="/">上传数据</a> 跑一次训练吧。</p>
+  </section>
+</main>
+
+<footer class="footer">
+  <span>基于 FastAPI + scikit-learn 的自动机器学习训练工具</span>
+  <span class="mono">v1.0.0</span>
+</footer>
+
+<script src="/js/dashboard.js"></script>
+</body>
+</html>

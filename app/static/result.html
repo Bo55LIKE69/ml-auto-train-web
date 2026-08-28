@@ -10,16 +10,34 @@
 <header class="navbar">
   <div class="nav-inner">
     <span class="logo"><span class="logo-mark"></span>表格ML自动训练工具</span>
-    <nav>
-      <a href="/">上传数据</a>
-      <a href="/select.html">选择标签</a>
-      <a href="/result.html" class="active">实验结果</a>
+    <nav class="stepper">
+      <a class="step" href="/"><span class="step-num">01</span><span class="step-label">上传数据</span></a>
+      <span class="step-line"></span>
+      <a class="step" href="/select.html"><span class="step-num">02</span><span class="step-label">选择标签</span></a>
+      <span class="step-line"></span>
+      <a class="step active" href="/result.html"><span class="step-num">03</span><span class="step-label">实验结果</span></a>
     </nav>
   </div>
 </header>
 
 <main class="container">
+  <!-- 训练进度区（新建训练时显示） -->
+  <section class="card" id="trainCard" hidden>
+    <p class="eyebrow">TRAINING / STEP 03</p>
+    <div class="result-head">
+      <h1>模型训练中</h1>
+      <span class="badge badge-gray" id="trainTaskBadge"></span>
+    </div>
+    <div id="trainProgressWrap">
+      <div class="progress-bar"><div id="trainProgressBar" class="progress-fill" style="width:0%"></div></div>
+      <p class="hint" id="trainProgressText">正在准备…</p>
+    </div>
+    <h2>训练日志 <span class="badge badge-gray">实时</span></h2>
+    <pre id="logViewer" class="log-viewer"></pre>
+  </section>
+
   <section class="card" id="emptyCard">
+    <p class="eyebrow">RESULT / STEP 03</p>
     <h1>实验结果</h1>
     <p class="subtitle">还没有训练结果。</p>
     <p class="subtitle">请先 <a href="/">上传数据集</a>，或直接输入 task_id 查看历史结果：</p>
@@ -31,6 +49,7 @@
   </section>
 
   <section class="card" id="resultCard" hidden>
+    <p class="eyebrow">RESULT / STEP 03</p>
     <div class="result-head">
       <h1>实验结果</h1>
       <span class="badge" id="taskTypeBadge"></span>
@@ -69,10 +88,17 @@
 
     <h2>下载</h2>
     <div class="btn-row">
+      <a class="btn-primary" id="dlPdf">下载 PDF 实验报告</a>
+      <a class="btn-secondary" id="dlDocx">下载 Word 实验报告</a>
       <a class="btn-secondary" id="dlReport">下载实验报告 (Markdown)</a>
       <a class="btn-secondary" id="dlScript">下载复现脚本 (Python)</a>
-      <a class="btn-secondary" id="dlJson">下载结果 JSON</a>
     </div>
+    <div class="btn-row">
+      <a class="btn-secondary" id="dlJson">结果 JSON</a>
+      <a class="btn-secondary" id="dlCharts">图表打包 (ZIP)</a>
+      <a class="btn-secondary" id="dlAll">全部产物 (ZIP)</a>
+    </div>
+    <p class="hint">Word 报告为七章格式（概述/数据说明/实验设置/模型对比/最优模型分析/局限与建议/附录），PDF 由本机 LibreOffice 转换生成，可直接用于论文。报告由工具自动生成，请核对后引用。</p>
     <div class="btn-row">
       <a href="/select.html" class="btn-ghost">重新配置任务</a>
     </div>

@@ -9,15 +9,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import STATIC_DIR, ensure_dirs
-from app.routers import ai, download, explore, train, upload
+from app.routers import ai, download, explore, result, tasks, train, upload
 
 # 创建运行时目录（uploads / outputs / static）
 ensure_dirs()
 
 app = FastAPI(
     title="表格数据集机器学习自动训练工具",
-    description="上传 CSV/Excel → 自动探查、预处理、多模型训练对比、可视化与报告生成",
-    version="0.1.0",
+    description="上传 CSV/Excel → 自动探查、预处理、多模型训练对比、可视化与报告生成（含 SHAP 可解释性 / PDF 报告）",
+    version="1.0.0",
 )
 
 # 开发期放开跨域（前端若用 file:// 直接打开或换端口访问时需要）
@@ -32,8 +32,10 @@ app.add_middleware(
 app.include_router(upload.router)
 app.include_router(explore.router)
 app.include_router(train.router)
+app.include_router(tasks.router)
 app.include_router(download.router)
 app.include_router(ai.router)
+app.include_router(result.router)
 
 
 @app.get("/api/health")

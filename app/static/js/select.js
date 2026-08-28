@@ -7,8 +7,11 @@ const warnBox = document.getElementById("warnBox");
 const configForm = document.getElementById("configForm");
 const trainBtn = document.getElementById("trainBtn");
 const trainStatus = document.getElementById("trainStatus");
+const modelPickField = document.getElementById("modelPickField");
+const modelPickBox = document.getElementById("modelPickBox");
 
 const fileId = new URLSearchParams(location.search).get("file_id");
+let modelCatalog = { classification: [], regression: [] };
 
 /* ---- 加载概览，填充下拉框 ---- */
 async function loadOverview() {
@@ -49,6 +52,38 @@ async function loadOverview() {
   }
 }
 
+/* ---- 加载模型清单（/api/models），供手动模式勾选 ---- */
+async function loadModels() {
+  try {
+    const resp = await fetch("/api/models");
+    if (!resp.ok) return;
+    modelCatalog = await resp.json();
+  } catch (e) { /* 静默失败，手动模式会提示 */ }
+}
+
+/* ---- 模式切换：auto -> 隐藏模型勾选；manual -> 展示 ---- */
+document.querySelectorAll('input[name="mode"]').forEach(r => {
+  r.addEventListener("change", () => {
+    const manual = document.querySelector('input[name="mode"]:checked').value === "manual";
+    modelPickField.hidden = !manual;
+    if (manual && modelCatalog.classification.length) renderModelPick();
+  });
+});
+
+/* ---- 渲染模型勾选（按当前任务类型）---- */
+function renderModelPick() {
+  const type = taskType.value === "regression" ? "regression" : "classification";
+  const models = modelCatalog[type];
+  if (!models.length) {
+    modelPickBox.innerHTML = '<p class="hint">模型清单加载失败，请刷新重试</p>';
+    return;
+  }
+  modelPickBox.innerHTML = models.map(m =>
+    `<label class="model-check"><input type="checkbox" value="${esc(m.key)}" checked>
+      <span><strong>${esc(m.name)}</strong><small>${esc(m.desc || "")}</small></span></label>`
+  ).join("");
+}
+
 /* ---- 提交训练 ---- */
 configForm.addEventListener("submit", async e => {
   e.preventDefault();
@@ -60,11 +95,24 @@ configForm.addEventListener("submit", async e => {
   showStatus("正在执行：预处理 -> 多模型训练 -> 评估 -> 绘图 -> 生成报告…", "info");
 
   const idCols = [...document.querySelectorAll("#idColsBox input:checked")].map(i => i.value);
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  let modelSet = [];
+  if (mode === "manual") {
+    modelSet = [...document.querySelectorAll("#modelPickBox input:checked")].map(i => i.value);
+    if (!modelSet.length) {
+      showStatus("请至少勾选 1 个模型", "error");
+      trainBtn.disabled = false;
+      trainBtn.textContent = "开始训练";
+      return;
+    }
+  }
+  const body = { file_id: fileId, target_col: target, task_type: taskType.value, id_cols: idCols };
+  if (mode === "manual") body.model_set = modelSet;
   try {
     const resp = await fetch("/api/train", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ file_id: fileId, target_col: target, task_type: taskType.value, id_cols: idCols }),
+      body: JSON.stringify(body),
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || "训练失败");
@@ -75,7 +123,7 @@ configForm.addEventListener("submit", async e => {
   } catch (err) {
     showStatus("失败：" + err.message, "error");
     trainBtn.disabled = false;
-    trainBtn.textContent = "开始自动训练";
+    trainBtn.textContent = "开始训练";
   }
 });
 
@@ -90,3 +138,4 @@ function esc(s) {
 }
 
 loadOverview();
+loadModels();

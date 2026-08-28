@@ -10,16 +10,19 @@
 <header class="navbar">
   <div class="nav-inner">
     <span class="logo"><span class="logo-mark"></span>表格ML自动训练工具</span>
-    <nav>
-      <a href="/">上传数据</a>
-      <a href="/select.html" class="active">选择标签</a>
-      <a href="/result.html">实验结果</a>
+    <nav class="stepper">
+      <a class="step" href="/"><span class="step-num">01</span><span class="step-label">上传数据</span></a>
+      <span class="step-line"></span>
+      <a class="step active" href="/select.html"><span class="step-num">02</span><span class="step-label">选择标签</span></a>
+      <span class="step-line"></span>
+      <a class="step" href="/result.html"><span class="step-num">03</span><span class="step-label">实验结果</span></a>
     </nav>
   </div>
 </header>
 
 <main class="container narrow">
   <section class="card">
+    <p class="eyebrow">CONFIG / STEP 02</p>
     <h1>配置训练任务</h1>
     <p class="subtitle">选择要预测的目标标签列，系统将自动完成预处理与多模型训练对比。</p>
 
@@ -51,7 +54,35 @@
 
       <div id="warnBox" class="warn" hidden></div>
 
-      <button type="submit" class="btn-primary btn-block" id="trainBtn">开始自动训练</button>
+      <div class="field">
+        <label>训练模式</label>
+        <div class="mode-switch">
+          <label class="mode-option">
+            <input type="radio" name="mode" value="auto" checked>
+            <span class="mode-card">
+              <strong>自动选模型</strong>
+              <small>系统自动跑全部模型（12 个分类 / 10 个回归）并选最优</small>
+            </span>
+          </label>
+          <label class="mode-option">
+            <input type="radio" name="mode" value="manual">
+            <span class="mode-card">
+              <strong>手动选模型</strong>
+              <small>自己勾选要对比的模型，只跑选中的</small>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div class="field" id="modelPickField" hidden>
+        <label>选择模型 <span class="req">*</span>（至少选 1 个）</label>
+        <div id="modelPickBox" class="checkbox-group">
+          <p class="hint">加载中…</p>
+        </div>
+        <p class="hint">勾选的模型将参与训练对比，未勾选的不跑</p>
+      </div>
+
+      <button type="submit" class="btn-primary btn-block" id="trainBtn">开始训练</button>
       <div id="trainStatus" class="status" hidden></div>
     </form>
   </section>

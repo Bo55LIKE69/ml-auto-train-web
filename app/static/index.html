@@ -10,50 +10,106 @@
 <header class="navbar">
   <div class="nav-inner">
     <span class="logo"><span class="logo-mark"></span>表格ML自动训练工具</span>
-    <nav>
-      <a href="/" class="active">上传数据</a>
-      <a href="/select.html">选择标签</a>
-      <a href="/result.html">实验结果</a>
+    <nav class="stepper">
+      <a class="step active" href="/"><span class="step-num">01</span><span class="step-label">上传数据</span></a>
+      <span class="step-line"></span>
+      <a class="step" href="/select.html"><span class="step-num">02</span><span class="step-label">选择标签</span></a>
+      <span class="step-line"></span>
+      <a class="step" href="/result.html"><span class="step-num">03</span><span class="step-label">实验结果</span></a>
+      <a class="step" href="/dashboard.html" title="实验工作台"><span class="step-num">·</span><span class="step-label">工作台</span></a>
     </nav>
   </div>
 </header>
 
 <main class="container">
-  <section class="card">
+  <section class="card" id="uploadCard">
+    <p class="eyebrow">DATASET / STEP 01</p>
     <h1>上传数据集</h1>
-    <p class="subtitle">支持 CSV / XLSX / XLS，最大 50MB。上传后自动读取并展示数据概览。</p>
+    <p class="subtitle">支持 CSV / XLSX / XLS，最大 50MB。上传后系统将自动读取数据并生成数据概览，进入建模流程。</p>
 
     <form id="uploadForm">
-      <div id="dropZone" class="drop-zone">
-        <p class="dz-icon">上传</p>
-        <p>点击选择文件，或将文件拖拽到此处</p>
-        <p class="dz-hint" id="fileHint">未选择文件</p>
+      <div id="dropZone" class="upload-zone">
+        <div class="dz-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <p class="dz-title">拖拽数据集到这里</p>
+        <p class="dz-sub">或点击选择本地文件</p>
+        <p class="dz-meta">CSV · XLSX · XLS · 最大 50MB</p>
       </div>
+
+      <!-- 已选文件卡片（JS 控制显隐） -->
+      <div id="fileCard" class="file-card" hidden>
+        <span class="file-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+        </span>
+        <div class="file-info">
+          <div class="file-name" id="fileName">dataset.csv</div>
+          <div class="file-size" id="fileSize">0 KB</div>
+          <div class="file-ready">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            文件已准备就绪
+          </div>
+        </div>
+        <button type="button" class="file-remove" id="fileRemove">删除</button>
+      </div>
+
       <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" hidden>
-      <button type="submit" class="btn-primary" id="uploadBtn">上传并探查数据</button>
+      <button type="submit" class="btn-primary btn-block" id="uploadBtn">上传并探索数据</button>
     </form>
 
     <div id="uploadStatus" class="status" hidden></div>
+
+    <p class="feature-section-title">上传后自动完成</p>
+    <div class="feature-list">
+      <div class="feature-item">
+        <span class="feature-num">01</span>
+        <span class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+        </span>
+        <div class="feature-text"><strong>读取数据</strong><small>自动识别字段、数据类型与缺失值</small></div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-num">02</span>
+        <span class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-4 4"/></svg>
+        </span>
+        <div class="feature-text"><strong>探索数据</strong><small>生成数据概览与统计信息</small></div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-num">03</span>
+        <span class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 7l3 3M17 7l-3 3M7 17l3-3M17 17l-3-3"/></svg>
+        </span>
+        <div class="feature-text"><strong>训练模型</strong><small>根据标签自动选择合适的 ML 算法</small></div>
+      </div>
+    </div>
   </section>
 
   <section class="card" id="overviewCard" hidden>
-    <h2>数据集概览</h2>
+    <p class="eyebrow">OVERVIEW</p>
+    <h1>数据集概览</h1>
     <div id="overviewStats" class="stats-grid"></div>
-    <h3>列信息</h3>
+    <h2>列信息</h2>
     <div class="table-wrap">
       <table id="colTable">
-        <thead>
-          <tr><th>列名</th><th>类型</th><th>缺失数</th><th>缺失率</th><th>唯一值</th><th>疑似ID</th></tr>
-        </thead>
+        <thead><tr><th>列名</th><th>类型</th><th>缺失数</th><th>缺失率</th><th>唯一值</th><th>疑似ID</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
-    <h3>数据预览（前5行）</h3>
+    <h2>数据预览（前 5 行）</h2>
     <div class="table-wrap table-scroll">
       <table id="previewTable"><thead></thead><tbody></tbody></table>
     </div>
     <div class="btn-row">
-      <a href="/select.html?file_id=__FILE_ID__" id="goSelectBtn" class="btn-primary">下一步：选择目标标签 -&gt;</a>
+      <a href="/select.html?file_id=__FILE_ID__" id="goSelectBtn" class="btn-primary">下一步：选择目标标签 →</a>
+      <a href="/dashboard.html" class="btn-secondary">查看实验工作台</a>
     </div>
   </section>
 </main>

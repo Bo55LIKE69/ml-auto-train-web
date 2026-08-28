@@ -3,11 +3,12 @@
 模型评估模块：分类与回归指标计算（纯 sklearn，独立可测）。
 
 分类指标：准确率 accuracy / 精确率 precision(macro) / 召回率 recall(macro)
-          / F1(macro) / AUC（仅二分类）
+          / F1(macro) / AUC（仅二分类）/ Kappa / MCC（规格书附录 B）
 回归指标：R² / MAE / MSE / RMSE
 """
 import numpy as np
-from sklearn.metrics import (accuracy_score, confusion_matrix, f1_score,
+from sklearn.metrics import (accuracy_score, confusion_matrix, cohen_kappa_score,
+                             f1_score, matthews_corrcoef,
                              mean_absolute_error, mean_squared_error,
                              precision_score, r2_score, recall_score,
                              roc_auc_score)
@@ -27,6 +28,8 @@ def evaluate_classification(y_true, y_pred, y_proba=None):
             y_true, y_pred, average="macro", zero_division=0)), 4),
         "f1": round(float(f1_score(
             y_true, y_pred, average="macro", zero_division=0)), 4),
+        "kappa": round(float(cohen_kappa_score(y_true, y_pred)), 4),
+        "mcc": round(float(matthews_corrcoef(y_true, y_pred)), 4),
         "auc": None,
     }
     if y_proba is not None and len(np.unique(y_true)) == 2:

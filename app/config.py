@@ -2,6 +2,7 @@
 """
 全局配置模块：统一管理文件存储路径、允许的上传类型、任务目录等。
 所有路径默认位于 D:/ML_help 下，可通过环境变量 ML_HELP_HOME 覆盖（便于换机器）。
+遵循规格书 §4「全局护栏配置」：所有资源限制集中在此处，禁止在业务代码中硬编码。
 """
 import os
 from pathlib import Path
@@ -16,21 +17,96 @@ OUTPUT_DIR = BASE_DIR / "outputs"
 # 前端静态文件目录
 STATIC_DIR = BASE_DIR / "app" / "static"
 
-# 允许上传的表格扩展名
-ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
+# ========== 文件限制（规格书 §4） ==========
+MAX_FILE_SIZE_MB = 50                # 上传文件最大 50MB
+MAX_UPLOAD_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024
+MAX_ROW_COUNT = 200_000              # 最大行数（规格书护栏）
+SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
+ALLOWED_EXTENSIONS = SUPPORTED_EXTENSIONS
+CSV_ENCODINGS_TO_TRY = ["utf-8", "gbk", "gb2312", "latin1"]   # 中文兼容
+CSV_ENCODINGS = CSV_ENCODINGS_TO_TRY
 
-# 读取 CSV 时尝试的编码（中文 Windows 导出的 CSV 常为 GBK/GB18030）
-CSV_ENCODINGS = ["utf-8", "gbk", "gb18030", "utf-8-sig"]
+# ========== 任务限制（规格书 §4） ==========
+TRAIN_TIMEOUT_SECONDS = 600          # 单任务超时 10 分钟
+MAX_CONCURRENT_TASKS = 2             # 最大并发任务数
+DEFAULT_FOLD = 5                     # 默认交叉验证折数
+RANDOM_STATE = 42                    # ★ 固定随机种子，保证可复现性
+SESSION_ID = RANDOM_STATE
 
-# 上传大小上限：50 MB
-MAX_UPLOAD_SIZE = 50 * 1024 * 1024
-
-# 训练集划分比例与随机种子（保证结果可复现）
+# 训练集划分比例（保留 train_test_split 用，CV 场景下为 holdout 比例）
 TEST_SIZE = 0.3
-RANDOM_STATE = 42
+
+# ========== 模型集合（规格书 §4 附录 A，12 模型） ==========
+# 默认完整模型集合（compare_models include 列表）
+DEFAULT_MODEL_SET = [
+    "lr",        # Logistic Regression
+    "knn",       # K Neighbors
+    "nb",        # Naive Bayes
+    "dt",        # Decision Tree
+    "rf",        # Random Forest
+    "et",        # Extra Trees
+    "ada",       # AdaBoost
+    "gbc",       # Gradient Boosting
+    "xgboost",   # XGBoost
+    "lightgbm",  # LightGBM
+    "catboost",  # CatBoost
+    "svm",       # SVM（线性核，避免慢）
+]
+# 超时后第一次降级：减少模型数量
+FALLBACK_MODEL_SET_SMALL = ["lr", "knn", "dt", "rf", "et", "gbc", "xgboost", "lightgbm"]
+# 第二次降级：只用最快的前三个
+FALLBACK_MODEL_SET_MINIMAL = ["lr", "dt", "rf"]
+
+# ========== 存储路径 ==========
+STORAGE_ROOT = OUTPUT_DIR
+DEMO_DATA_DIR = BASE_DIR / "demo-data"
+
+# ========== 任务类型自动判断阈值（规格书 §4） ==========
+CLASSIFICATION_UNIQUE_THRESHOLD = 20   # 唯一值 ≤ 此数 → 可能是分类标签
+ID_COLUMN_RATIO_THRESHOLD = 0.95       # 唯一值占比 ≥ 此数 → 疑似 ID 列
+
+# ========== LLM 配置（AI 解读用） ==========
+LLM_PROVIDER = os.environ.get("QCLAW_API_BASE", "") or "openai"
+LLM_MODEL = os.environ.get("QCLAW_API_KEY", "") or "gpt-4o-mini"
+LLM_MAX_TOKENS = 2000
+
+# ========== 报告配置（规格书 §4） ==========
+REPORT_CHART_DPI = 150                # 报告内嵌图分辨率（打印级）
+REPORT_DISCLAIMER = (
+    "以下内容由 AutoML 毕设实验工作台自动生成，"
+    "仅供学习参考使用，请核对后引用至论文或报告中。"
+)
+
+# ========== 可解释性与图表增强（v1.0.0） ==========
+SHAP_MAX_SAMPLES = 100               # SHAP 可解释性采样上限（控制耗时）
+CORRELATION_MAX_FEATURES = 30        # 相关性热力图最大特征数（超出取方差 Top N）
+PDF_ENABLED = True                   # 是否启用 PDF 报告导出（需本机安装 LibreOffice）
+PDF_TIMEOUT_SECONDS = 120            # LibreOffice 转换超时
+
+# LibreOffice 可执行文件路径（自动探测）
+SOFFICE_CANDIDATES = [
+    r"C:\Program Files\LibreOffice\program\soffice.exe",
+    r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+]
 
 
 def ensure_dirs():
     """确保运行时目录存在（幂等，启动时调用）。"""
     for d in (UPLOAD_DIR, OUTPUT_DIR, STATIC_DIR):
         d.mkdir(parents=True, exist_ok=True)
+
+
+# LibreOffice 路径探测（在 ensure_dirs 调用前不能依赖 Path 对象，用 shutil）
+import shutil as _shutil
+SOFFICE_EXE = None
+for _p in SOFFICE_CANDIDATES:
+    if Path(_p).exists():
+        SOFFICE_EXE = _p
+        break
+if SOFFICE_EXE is None:
+    _found = _shutil.which("soffice") or _shutil.which("soffice.exe")
+    if _found:
+        SOFFICE_EXE = _found
+
+print(f"[config] LibreOffice PDF conversion: {'ENABLED at ' + SOFFICE_EXE if SOFFICE_EXE else 'DISABLED (soffice not found)'}")
+

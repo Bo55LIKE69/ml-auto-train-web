@@ -5,6 +5,10 @@
 """
 import matplotlib
 
+# 强制使用非交互后端（Agg）：服务端在后台线程出图，GUI 后端（tkagg 等）
+# 会在非主线程触发 Tcl 崩溃，导致整个 uvicorn 进程退出（已踩坑）。
+matplotlib.use("Agg")
+
 # 中文字体：优先 Microsoft YaHei / SimHei（Windows 自带），
 # 不存在时回退 DejaVu Sans（英文标签），保证脚本在 Linux 也能跑。
 from matplotlib import font_manager
@@ -69,3 +73,103 @@ def plot_feature_importance(model, feature_names, save_path, top_n=15,
     fig.tight_layout()
     fig.savefig(save_path)
     plt.close(fig)
+
+
+def plot_metrics_comparison(results, task_type, save_path,
+                            title="模型指标对比（测试集）"):
+    """
+    指标对比横向柱状图（规格书第四章：指标柱状对比图）。
+    results: [{name, metrics}]，分类取 F1，回归取 R²。
+    """
+    names = [r["name"] for r in results]
+    key = "f1" if task_type == "classification" else "r2"
+    vals = [r["metrics"].get(key, 0) for r in results]
+    colors = ["#2ecc71" if v == max(vals) else "#4C72B0" for v in vals]
+
+    fig, ax = plt.subplots(figsize=(8, max(4, 0.4 * len(names))), dpi=120)
+    ax.barh(range(len(names))[::-1], vals, color=colors)
+    ax.set_yticks(range(len(names))[::-1])
+    ax.set_yticklabels(names)
+    ax.set_xlabel("F1" if key == "f1" else "R²")
+    ax.set_title(title)
+    for i, v in enumerate(vals):
+        ax.text(v + 0.005, len(names) - 1 - i, f"{v:.3f}", va="center", fontsize=8)
+    fig.tight_layout()
+    fig.savefig(save_path)
+    plt.close(fig)
+
+
+def plot_correlation_heatmap(df, save_path, max_features=30,
+                             title="特征相关性热力图"):
+    """
+    数值特征相关性热力图（数据探索增强）。
+    仅保留数值列；特征数超过 max_features 时按方差取 Top N，避免图过密。
+    df: 原始 DataFrame（含目标列）
+    """
+    import pandas as pd
+
+    num_df = df.select_dtypes(include=[np.number])
+    if num_df.shape[1] < 2:
+        return False  # 数值列不足，跳过
+    if num_df.shape[1] > max_features:
+        vars_ = num_df.var().sort_values(ascending=False)
+        num_df = num_df[vars_.index[:max_features]]
+
+    corr = num_df.corr()
+    fig, ax = plt.subplots(figsize=(max(7, corr.shape[1] * 0.55),
+                                    max(6, corr.shape[0] * 0.55)), dpi=120)
+    im = ax.imshow(corr, cmap="RdBu_r", vmin=-1, vmax=1)
+    ax.set_xticks(range(len(corr.columns)))
+    ax.set_yticks(range(len(corr.index)))
+    ax.set_xticklabels(corr.columns, rotation=45, ha="right", fontsize=9)
+    ax.set_yticklabels(corr.index, fontsize=9)
+    for i in range(len(corr.index)):
+        for j in range(len(corr.columns)):
+            v = corr.iloc[i, j]
+            ax.text(j, i, f"{v:.2f}", ha="center", va="center",
+                    fontsize=7, color="white" if abs(v) > 0.6 else "black")
+    fig.colorbar(im, ax=ax, shrink=0.8)
+    ax.set_title(title)
+    fig.tight_layout()
+    fig.savefig(save_path)
+    plt.close(fig)
+    return True
+
+
+def plot_shap_summary(model, X_sample, feature_names, save_path,
+                      title="SHAP 特征重要性（BeeSwarm）"):
+    """
+    SHAP 可解释性 BeeSwarm 图（最优模型）。
+    依赖 shap 库；采样上限由调用方控制（默认 100 行）。
+    回归模型使用 explainer(model.predict)；分类模型取类别 1 的 SHAP 值。
+    """
+    import shap
+
+    try:
+        # 树模型（XGBoost/LightGBM/CatBoost/随机森林等）优先用 TreeExplainer
+        tree_like = hasattr(model, "get_booster") or hasattr(model, "n_estimators") or \
+            hasattr(model, "feature_importances_")
+        if tree_like:
+            explainer = shap.TreeExplainer(model)
+        else:
+            explainer = shap.Explainer(model.predict, X_sample)
+        shap_values = explainer(X_sample)
+        # 分类模型 shap_values 是列表（每类一个），取最后一类（正类）
+        if isinstance(shap_values, list):
+            shap_values = shap_values[-1]
+
+        fig, ax = plt.subplots(figsize=(9, max(5, 0.45 * min(len(feature_names), 20))), dpi=120)
+        shap.summary_plot(shap_values, X_sample, feature_names=feature_names,
+                          show=False, max_display=min(len(feature_names), 20))
+        ax.set_title(title)
+        fig.tight_layout()
+        fig.savefig(save_path, bbox_inches="tight")
+        plt.close(fig)
+        return True
+    except Exception:
+        # SHAP 对部分模型（如 SVC probability）不支持，降级返回 False
+        try:
+            plt.close("all")
+        except Exception:
+            pass
+        return False
