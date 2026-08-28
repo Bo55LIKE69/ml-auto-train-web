@@ -109,11 +109,12 @@ def _top_features_sentence(result):
     return "、".join(f"**{t['feature']}**（{t['importance']}）" for t in top) + " 为影响预测结果的主要特征"
 
 
-def generate_script(result, source_file, target_col, task_type) -> str:
+def generate_script(result, source_file, target_col, task_type, fe_opts=None) -> str:
     """
     生成可独立运行的 Python 复现脚本。
     脚本逻辑与 app/ml/train.py 的 run_pipeline 完全一致，
     学生在本机安装依赖后即可一键复现全部结果。
+    fe_opts：特征工程选项 dict（缺失值策略/缩放/类别编码），脚本将按实际配置生成管道。
     """
     task = "classification" if task_type == "classification" else "regression"
     source = source_file or "你的数据文件.csv"
@@ -183,6 +184,20 @@ for _f in ("Microsoft YaHei", "SimHei", "Noto Sans CJK SC", "Arial Unicode MS"):
         break
 plt.rcParams["axes.unicode_minus"] = False"""
     )
+
+    # 特征工程选项脚本片段（自动反映训练时实际配置，auto 为默认）
+    fe_opts = fe_opts or {}
+    _fe = {
+        "impute_strategy": fe_opts.get("impute_strategy", "auto"),
+        "scaler": fe_opts.get("scaler", "auto"),
+        "cat_encoding": fe_opts.get("cat_encoding", "auto"),
+    }
+    fe_script = "{" + ", ".join(f'"{k}": "{v}"' for k, v in _fe.items()) + "}"
+    # 按需补充 import（MinMaxScaler / LabelEncoder）
+    if _fe["scaler"] == "minmax":
+        import_block += "\nfrom sklearn.preprocessing import MinMaxScaler"
+    if _fe["cat_encoding"] == "label":
+        import_block += "\nfrom sklearn.preprocessing import OrdinalEncoder"
 
     return f'''# -*- coding: utf-8 -*-
 """
@@ -254,21 +269,36 @@ def main():
         class_names = None
         stratify = None
 
-    # 预处理管道（数值：中位数填充+标准化；类别：众数填充+独热）
+    # 特征工程选项（与训练时一致，auto 为默认）
+    FE_OPTS = {fe_script}
+
+    # 预处理管道：按 FE_OPTS 构建
     num_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c].dropna())]
     cat_cols = [c for c in X.columns if not pd.api.types.is_numeric_dtype(X[c].dropna())]
+    impute_strategy = FE_OPTS["impute_strategy"]
+    scaler = FE_OPTS["scaler"]
+    cat_encoding = FE_OPTS["cat_encoding"]
+    num_impute = "median" if impute_strategy == "auto" else impute_strategy
+    cat_impute = "most_frequent" if impute_strategy == "auto" else impute_strategy
     transformers = []
     if num_cols:
-        transformers.append(("num", Pipeline([
-            ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", StandardScaler())]), num_cols))
+        num_steps = [("imputer", SimpleImputer(strategy=num_impute))]
+        if scaler == "minmax":
+            num_steps.append(("scaler", MinMaxScaler()))
+        elif scaler != "none":
+            num_steps.append(("scaler", StandardScaler()))
+        transformers.append(("num", Pipeline(num_steps), num_cols))
     if cat_cols:
-        transformers.append(("cat", Pipeline([
-            ("imputer", SimpleImputer(strategy="most_frequent")),
-            ("encoder", OneHotEncoder(handle_unknown="ignore"))]), cat_cols))
+        cat_steps = [("imputer", SimpleImputer(strategy=cat_impute))]
+        if cat_encoding == "label":
+            cat_steps.append(("encoder", OrdinalEncoder(
+                handle_unknown="use_encoded_value", unknown_value=-1)))
+        else:
+            cat_steps.append(("encoder", OneHotEncoder(handle_unknown="ignore")))
+        transformers.append(("cat", Pipeline(cat_steps), cat_cols))
     pre = ColumnTransformer(transformers, remainder="drop")
 
-    print(f"[2/7] 预处理完成：任务类型={{TASK_TYPE}}")
+    print(f"[2/7] 预处理完成：任务类型={{TASK_TYPE}}，特征工程={{FE_OPTS}}")
 
     # ---- 7:3 划分 ----
     X_train, X_test, y_train, y_test = train_test_split(

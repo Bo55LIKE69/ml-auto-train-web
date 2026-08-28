@@ -205,7 +205,7 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
                  test_size=TEST_SIZE, random_state=RANDOM_STATE,
                  out_dir=None, source_file=None, model_set=None,
                  fold=DEFAULT_FOLD, timeout=TRAIN_TIMEOUT_SECONDS,
-                 log=None, progress_cb=None):
+                 log=None, progress_cb=None, fe_opts=None):
     """
     完整训练流水线入口（规格书 §5.3）。
 
@@ -221,6 +221,7 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
         timeout      单任务超时秒数
         log          LogCapture 实例（收集训练日志）
         progress_cb  进度回调 (stage, percent, message)
+        fe_opts      特征工程选项 dict（缺失值策略/缩放/类别编码），None 用默认
 
     返回：结果 dict（可直接 JSON 序列化，含模型对比、最优模型、图 URL 等）
     """
@@ -235,13 +236,16 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
             progress_cb(stage, pct, msg)
 
     # ---- 1. 预处理 ----
-    X, y, _, preprocessor, meta = prepare_dataset(df, target_col, id_cols)
+    X, y, _, preprocessor, meta = prepare_dataset(df, target_col, id_cols, fe_opts)
     if task_type not in ("auto", "classification", "regression"):
         raise ValueError(f"非法的 task_type: {task_type}")
     if task_type != "auto":
         meta["task_type"] = task_type          # 用户强制指定任务类型
     task_type = meta["task_type"]
-    _progress("preprocess", 5, f"预处理完成：{meta['n_samples']} 样本 x {meta['n_features_raw']} 特征，任务类型={task_type}")
+    fe = meta.get("fe_opts", {})
+    _progress("preprocess", 5,
+              f"预处理完成：{meta['n_samples']} 样本 x {meta['n_features_raw']} 特征，任务类型={task_type}"
+              + (f"，特征工程[缺失值={fe.get('impute_strategy')} 缩放={fe.get('scaler')} 编码={fe.get('cat_encoding')}]" if fe else ""))
 
     # ---- 2. 目标列编码 ----
     y_enc, y_encoder, class_names = _encode_y(task_type, y)
@@ -379,6 +383,7 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
         "class_names": class_names,
         "warnings": meta["warnings"],
         "drop_cols": meta["drop_cols"],
+        "fe_opts": fe,
         "models": results,
         "best_model": {
             "name": best_name,
@@ -400,6 +405,11 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
         sort_metric = "F1" if task_type == "classification" else "R2"
         ir = new_ir(task_id, source_file, target_col, task_type, model_set,
                     sort_metric, fold, random_state)
+        ir["setup_config"].update({
+            "impute_strategy": fe.get("impute_strategy", "auto"),
+            "scaler": fe.get("scaler", "auto"),
+            "cat_encoding": fe.get("cat_encoding", "auto"),
+        })
         ir = update_data_info(ir, df, meta["drop_cols"])
         best_params = {}
         if best_name in model_refs and hasattr(model_refs[best_name], "get_params"):
@@ -417,7 +427,7 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
         except Exception as e:
             log.append(f"! Word 报告生成失败：{e}")
         # 可独立运行的复现脚本
-        script_py = generate_script(result, source_file, target_col, task_type)
+        script_py = generate_script(result, source_file, target_col, task_type, fe)
         (out_dir / "script.py").write_text(script_py, encoding="utf-8")
         # 结果 JSON（供 /api/result/{task_id} 查询）
         (out_dir / "result.json").write_text(

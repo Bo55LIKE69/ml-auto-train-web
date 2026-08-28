@@ -7,6 +7,66 @@
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
+<div class="app-shell">
+  <!-- 左侧边栏：显眼目录导航 -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="logo-mark"></span>
+      <div>
+        <div class="sidebar-brand-name">表格ML自动训练</div>
+        <div class="sidebar-brand-sub">DATA LAB</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <p class="sidebar-section-label">工作流</p>
+      <a class="sidebar-link" href="/">
+        <span class="sidebar-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </span>
+        <span class="sidebar-link-text">
+          <span class="sidebar-link-name">上传数据</span>
+          <span class="sidebar-link-desc">导入 CSV / Excel 数据集</span>
+        </span>
+        <span class="sidebar-step-badge">01</span>
+      </a>
+      <a class="sidebar-link active" href="/select.html">
+        <span class="sidebar-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-4 4"/></svg>
+        </span>
+        <span class="sidebar-link-text">
+          <span class="sidebar-link-name">选择标签</span>
+          <span class="sidebar-link-desc">配置目标列与模型</span>
+        </span>
+        <span class="sidebar-step-badge">02</span>
+      </a>
+      <a class="sidebar-link" href="/result.html">
+        <span class="sidebar-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 7l3 3M17 7l-3 3M7 17l3-3M17 17l-3-3"/></svg>
+        </span>
+        <span class="sidebar-link-text">
+          <span class="sidebar-link-name">实验结果</span>
+          <span class="sidebar-link-desc">模型对比与报告下载</span>
+        </span>
+        <span class="sidebar-step-badge">03</span>
+      </a>
+      <p class="sidebar-section-label">工具</p>
+      <a class="sidebar-link" href="/dashboard.html">
+        <span class="sidebar-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        </span>
+        <span class="sidebar-link-text">
+          <span class="sidebar-link-name">实验工作台</span>
+          <span class="sidebar-link-desc">历史任务记录</span>
+        </span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="mono">v1.0.0</span>
+      <small>FastAPI + scikit-learn</small>
+    </div>
+  </aside>
+
+  <div class="app-main">
 <header class="navbar">
   <div class="nav-inner">
     <span class="logo"><span class="logo-mark"></span>表格ML自动训练工具</span>
@@ -16,6 +76,7 @@
       <a class="step active" href="/select.html"><span class="step-num">02</span><span class="step-label">选择标签</span></a>
       <span class="step-line"></span>
       <a class="step" href="/result.html"><span class="step-num">03</span><span class="step-label">实验结果</span></a>
+      <a class="step" href="/dashboard.html" title="实验工作台"><span class="step-num">·</span><span class="step-label">工作台</span></a>
     </nav>
   </div>
 </header>
@@ -82,6 +143,39 @@
         <p class="hint">勾选的模型将参与训练对比，未勾选的不跑</p>
       </div>
 
+      <div class="field">
+        <label>特征工程选项 <span class="badge badge-gray">高级</span></label>
+        <div class="fe-grid">
+          <div class="fe-item">
+            <label for="feImpute">缺失值策略</label>
+            <select id="feImpute">
+              <option value="auto">自动（数值→中位数 / 类别→众数）</option>
+              <option value="median">中位数填充</option>
+              <option value="most_frequent">众数填充</option>
+              <option value="constant">常数 0 填充</option>
+            </select>
+          </div>
+          <div class="fe-item">
+            <label for="feScaler">特征缩放</label>
+            <select id="feScaler">
+              <option value="auto">自动（标准化 StandardScaler）</option>
+              <option value="standard">标准化（StandardScaler）</option>
+              <option value="minmax">归一化（MinMaxScaler）</option>
+              <option value="none">不缩放</option>
+            </select>
+          </div>
+          <div class="fe-item">
+            <label for="feCatEncoding">类别编码</label>
+            <select id="feCatEncoding">
+              <option value="auto">自动（独热 OneHot）</option>
+              <option value="onehot">独热编码（OneHot）</option>
+              <option value="label">标签编码（Label）</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint">默认「自动」保持推荐配置；训练结果与复现脚本会记录本次实际使用的特征工程配置。</p>
+      </div>
+
       <button type="submit" class="btn-primary btn-block" id="trainBtn">开始训练</button>
       <div id="trainStatus" class="status" hidden></div>
     </form>
@@ -92,6 +186,9 @@
   <span>基于 FastAPI + scikit-learn 的自动机器学习训练工具</span>
   <span class="mono">v1.0.0</span>
 </footer>
+
+  </div><!-- /app-main -->
+</div><!-- /app-shell -->
 
 <script src="/js/select.js"></script>
 </body>

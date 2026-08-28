@@ -108,6 +108,15 @@ configForm.addEventListener("submit", async e => {
   }
   const body = { file_id: fileId, target_col: target, task_type: taskType.value, id_cols: idCols };
   if (mode === "manual") body.model_set = modelSet;
+  // 特征工程选项（仅传用户显式选择的，auto 可不传）
+  const fe = {};
+  const feImpute = document.getElementById("feImpute");
+  const feScaler = document.getElementById("feScaler");
+  const feCat = document.getElementById("feCatEncoding");
+  if (feImpute && feImpute.value !== "auto") fe.impute_strategy = feImpute.value;
+  if (feScaler && feScaler.value !== "auto") fe.scaler = feScaler.value;
+  if (feCat && feCat.value !== "auto") fe.cat_encoding = feCat.value;
+  if (Object.keys(fe).length) body.fe_opts = fe;
   try {
     const resp = await fetch("/api/train", {
       method: "POST",

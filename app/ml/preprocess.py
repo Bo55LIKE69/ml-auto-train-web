@@ -17,7 +17,12 @@ import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import (MinMaxScaler, OneHotEncoder, OrdinalEncoder,
+                                   StandardScaler)
+
+from app.config import (CAT_ENCODING_CHOICES, DEFAULT_FE_OPTS,
+                        IMPUTE_CONSTANT_VALUE, IMPUTE_STRATEGY_CHOICES,
+                        SCALER_CHOICES)
 
 # 类别列取值上限：超过则视为高基数文本列，直接剔除
 HIGH_CARDINALITY_LIMIT = 50
@@ -44,40 +49,91 @@ def _looks_like_id(col: str, series: pd.Series) -> bool:
     return any(k in name for k in ID_KEYWORDS)
 
 
-def build_preprocessor(df: pd.DataFrame):
+def _resolve_fe_opts(fe_opts=None) -> dict:
+    """特征工程选项解析：缺省字段补 auto（等价旧行为），非法值回退 auto。"""
+    opts = dict(DEFAULT_FE_OPTS)
+    if fe_opts:
+        opts.update({k: v for k, v in fe_opts.items() if v})
+    if opts["impute_strategy"] not in IMPUTE_STRATEGY_CHOICES:
+        opts["impute_strategy"] = "auto"
+    if opts["scaler"] not in SCALER_CHOICES:
+        opts["scaler"] = "auto"
+    if opts["cat_encoding"] not in CAT_ENCODING_CHOICES:
+        opts["cat_encoding"] = "auto"
+    return opts
+
+
+def _make_imputer(strategy: str):
+    """缺失值填充器：auto -> 数值列中位数/类别列众数由调用方决定。"""
+    if strategy == "constant":
+        return SimpleImputer(strategy="constant", fill_value=IMPUTE_CONSTANT_VALUE)
+    return SimpleImputer(strategy=strategy)
+
+
+def _make_scaler(scaler: str):
+    """特征缩放器：standard/minmax/none。"""
+    if scaler == "minmax":
+        return MinMaxScaler()
+    if scaler == "none":
+        return None
+    return StandardScaler()
+
+
+def build_preprocessor(df: pd.DataFrame, fe_opts=None):
     """
-    按列类型构建 ColumnTransformer：
-    - 数值列：SimpleImputer(中位数) → StandardScaler
-    - 类别列：SimpleImputer(众数) → OneHotEncoder(handle_unknown='ignore')
+    按列类型构建 ColumnTransformer（v1.1.0 支持特征工程选项）：
+    - 数值列：SimpleImputer → 可选缩放（standard/minmax/none）
+    - 类别列：SimpleImputer → 可选编码（onehot / label）
     - remainder='drop'：其余列（理论上不存在）直接丢弃
-    返回 (preprocessor, num_cols, cat_cols)
+
+    fe_opts 支持：
+      impute_strategy: auto / median / most_frequent / constant（数值与类别列共用）
+      scaler: auto / standard / minmax / none（仅数值列）
+      cat_encoding: auto / onehot / label（仅类别列）
+    全 auto 时行为与 v1.0.0 完全一致：数值中位数填充+标准化，类别众数填充+独热。
+
+    返回 (preprocessor, num_cols, cat_cols, fe_applied)
     """
+    opts = _resolve_fe_opts(fe_opts)
+    impute = opts["impute_strategy"]
+    scaler = opts["scaler"]
+    cat_enc = opts["cat_encoding"]
+    # auto 语义：数值列 -> median，类别列 -> most_frequent
+    num_impute = "median" if impute == "auto" else impute
+    cat_impute = "most_frequent" if impute == "auto" else impute
+
     num_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c].dropna())]
     cat_cols = [c for c in df.columns if not pd.api.types.is_numeric_dtype(df[c].dropna())]
 
     transformers = []
     if num_cols:
-        transformers.append((
-            "num",
-            Pipeline([
-                ("imputer", SimpleImputer(strategy="median")),  # 数值列缺失填中位数
-                ("scaler", StandardScaler()),                    # 标准化（线性模型/SVM 需要）
-            ]),
-            num_cols,
-        ))
+        num_steps = [("imputer", _make_imputer(num_impute))]
+        sc = _make_scaler(scaler)
+        if sc is not None:
+            num_steps.append(("scaler", sc))
+        transformers.append(("num", Pipeline(num_steps), num_cols))
     if cat_cols:
-        transformers.append((
-            "cat",
-            Pipeline([
-                ("imputer", SimpleImputer(strategy="most_frequent")),  # 类别列缺失填众数
-                ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
-            ]),
-            cat_cols,
-        ))
-    return ColumnTransformer(transformers, remainder="drop"), num_cols, cat_cols
+        cat_steps = [("imputer", _make_imputer(cat_impute))]
+        if cat_enc == "label":
+            # 标签编码：每列独立 OrdinalEncoder，输出 1 列（比独热维度小，适合树模型）
+            cat_steps.append(("encoder", OrdinalEncoder(
+                handle_unknown="use_encoded_value", unknown_value=-1)))
+        else:
+            # auto / onehot：独热编码（v1.0.0 原行为）
+            cat_steps.append(("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)))
+        transformers.append(("cat", Pipeline(cat_steps), cat_cols))
+
+    pre = ColumnTransformer(transformers, remainder="drop")
+    fe_applied = {
+        "impute_strategy": impute,
+        "scaler": scaler,
+        "cat_encoding": cat_enc,
+    }
+    return pre, num_cols, cat_cols, fe_applied
 
 
-def prepare_dataset(df: pd.DataFrame, target_col: str, id_cols=None):
+def prepare_dataset(df: pd.DataFrame, target_col: str, id_cols=None,
+                    fe_opts=None):
     """
     数据预处理入口。
 
@@ -85,6 +141,8 @@ def prepare_dataset(df: pd.DataFrame, target_col: str, id_cols=None):
         df        原始 DataFrame
         target_col 目标标签列名
         id_cols   用户显式指定要剔除的列（可选）
+        fe_opts   特征工程选项 dict（可选）：
+                  impute_strategy / scaler / cat_encoding，缺省 auto 等价旧行为
 
     返回：
         X           剔除无用列后的特征 DataFrame（未填充缺失）
@@ -154,7 +212,7 @@ def prepare_dataset(df: pd.DataFrame, target_col: str, id_cols=None):
     task_type = detect_task_type(y)
 
     # 8) 构建预处理管道（未 fit）
-    preprocessor, num_cols, cat_cols = build_preprocessor(X)
+    preprocessor, num_cols, cat_cols, fe_applied = build_preprocessor(X, fe_opts)
 
     meta = {
         "task_type": task_type,
@@ -164,5 +222,6 @@ def prepare_dataset(df: pd.DataFrame, target_col: str, id_cols=None):
         "cat_cols": cat_cols,
         "n_samples": n,
         "n_features_raw": X.shape[1],
+        "fe_opts": fe_applied,
     }
     return X, y, None, preprocessor, meta

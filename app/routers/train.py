@@ -12,8 +12,8 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.config import (DEFAULT_FOLD, DEFAULT_MODEL_SET, OUTPUT_DIR,
-                        UPLOAD_DIR)
+from app.config import (DEFAULT_FE_OPTS, DEFAULT_FOLD, DEFAULT_MODEL_SET,
+                        OUTPUT_DIR, UPLOAD_DIR)
 from app.ml.explore import read_table
 from app.ml.train import (LogCapture, MODEL_CATALOG, run_pipeline)
 
@@ -33,6 +33,7 @@ class TrainRequest(BaseModel):
     model_set: list[str] = Field(default_factory=list, description="模型缩写列表，空则用默认 12 模型")
     fold: int = Field(DEFAULT_FOLD, description="交叉验证折数")
     sort_metric: str = Field("F1", description="排序指标（F1 / R2）")
+    fe_opts: dict = Field(default_factory=dict, description="特征工程选项（缺失值策略/缩放/类别编码）")
 
 
 @router.get("/models")
@@ -88,6 +89,7 @@ def train(req: TrainRequest):
                 model_set=model_set,
                 fold=req.fold,
                 log=log,
+                fe_opts=req.fe_opts or None,
             )
             with _LOCK:
                 _TASKS[task_id] = {"status": "completed", "result": result, "log": log}

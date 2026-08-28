@@ -83,6 +83,23 @@ CORRELATION_MAX_FEATURES = 30        # 相关性热力图最大特征数（超�
 PDF_ENABLED = True                   # 是否启用 PDF 报告导出（需本机安装 LibreOffice）
 PDF_TIMEOUT_SECONDS = 120            # LibreOffice 转换超时
 
+# ========== 特征工程选项（v1.1.0，默认 auto 保持原行为） ==========
+# 缺失值策略：auto(中位数/众数) / median / most_frequent / constant
+IMPUTE_STRATEGY_CHOICES = ("auto", "median", "most_frequent", "constant")
+# 特征缩放：auto(标准化) / standard / minmax / none
+SCALER_CHOICES = ("auto", "standard", "minmax", "none")
+# 类别编码：auto(独热) / onehot / label
+CAT_ENCODING_CHOICES = ("auto", "onehot", "label")
+# 常数填充值（strategy=constant 时使用）
+IMPUTE_CONSTANT_VALUE = 0
+
+# 特征工程选项默认值（全 auto = 完全等价于旧行为）
+DEFAULT_FE_OPTS = {
+    "impute_strategy": "auto",
+    "scaler": "auto",
+    "cat_encoding": "auto",
+}
+
 # LibreOffice 可执行文件路径（自动探测）
 SOFFICE_CANDIDATES = [
     r"C:\Program Files\LibreOffice\program\soffice.exe",

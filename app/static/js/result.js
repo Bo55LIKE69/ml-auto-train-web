@@ -163,6 +163,28 @@ function render(r) {
     { num: r.drop_cols.length, lbl: "剔除列数" },
   ].map(s => `<div class="stat-box"><div class="num">${s.num}</div><div class="lbl">${s.lbl}</div></div>`).join("");
 
+  // 特征工程配置（v1.1.0）
+  const fe = r.fe_opts || {};
+  const feMap = {
+    impute_strategy: {"auto": "自动", "median": "中位数", "most_frequent": "众数", "constant": "常数0"},
+    scaler: {"auto": "标准化", "standard": "标准化", "minmax": "归一化", "none": "不缩放"},
+    cat_encoding: {"auto": "独热", "onehot": "独热", "label": "标签"},
+  };
+  if (Object.keys(fe).length) {
+    const feText = [
+      feMap.impute_strategy[fe.impute_strategy] ? `缺失值：${feMap.impute_strategy[fe.impute_strategy]}` : "",
+      feMap.scaler[fe.scaler] ? `缩放：${feMap.scaler[fe.scaler]}` : "",
+      feMap.cat_encoding[fe.cat_encoding] ? `编码：${feMap.cat_encoding[fe.cat_encoding]}` : "",
+    ].filter(Boolean).join(" · ");
+    if (feText) {
+      const feBox = document.getElementById("feInfoBox") || document.createElement("p");
+      feBox.id = "feInfoBox";
+      feBox.className = "hint fe-info";
+      feBox.textContent = "特征工程配置：" + feText;
+      warnBox.after(feBox);
+    }
+  }
+
   // 模型对比表（动态表头）
   const headers = Object.keys(r.models[0].metrics);
   modelHead.innerHTML = `<th>模型</th>${headers.map(h => `<th>${h}</th>`).join("")}`;

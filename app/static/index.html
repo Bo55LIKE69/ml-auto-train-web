@@ -7,6 +7,66 @@
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
+<div class="app-shell">
+  <!-- 左侧边栏：显眼目录导航 -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="logo-mark"></span>
+      <div>
+        <div class="sidebar-brand-name">表格ML自动训练</div>
+        <div class="sidebar-brand-sub">DATA LAB</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <p class="sidebar-section-label">工作流</p>
+      <a class="sidebar-link active" href="/">
+        <span class="sidebar-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </span>
+        <span class="sidebar-link-text">
+          <span class="sidebar-link-name">上传数据</span>
+          <span class="sidebar-link-desc">导入 CSV / Excel 数据集</span>
+        </span>
+        <span class="sidebar-step-badge">01</span>
+      </a>
+      <a class="sidebar-link" href="/select.html">
+        <span class="sidebar-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-4 4"/></svg>
+        </span>
+        <span class="sidebar-link-text">
+          <span class="sidebar-link-name">选择标签</span>
+          <span class="sidebar-link-desc">配置目标列与模型</span>
+        </span>
+        <span class="sidebar-step-badge">02</span>
+      </a>
+      <a class="sidebar-link" href="/result.html">
+        <span class="sidebar-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 7l3 3M17 7l-3 3M7 17l3-3M17 17l-3-3"/></svg>
+        </span>
+        <span class="sidebar-link-text">
+          <span class="sidebar-link-name">实验结果</span>
+          <span class="sidebar-link-desc">模型对比与报告下载</span>
+        </span>
+        <span class="sidebar-step-badge">03</span>
+      </a>
+      <p class="sidebar-section-label">工具</p>
+      <a class="sidebar-link" href="/dashboard.html">
+        <span class="sidebar-link-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        </span>
+        <span class="sidebar-link-text">
+          <span class="sidebar-link-name">实验工作台</span>
+          <span class="sidebar-link-desc">历史任务记录</span>
+        </span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="mono">v1.0.0</span>
+      <small>FastAPI + scikit-learn</small>
+    </div>
+  </aside>
+
+  <div class="app-main">
 <header class="navbar">
   <div class="nav-inner">
     <span class="logo"><span class="logo-mark"></span>表格ML自动训练工具</span>
@@ -118,6 +178,9 @@
   <span>基于 FastAPI + scikit-learn 的自动机器学习训练工具</span>
   <span class="mono">v1.0.0</span>
 </footer>
+
+  </div><!-- /app-main -->
+</div><!-- /app-shell -->
 
 <script src="/js/upload.js"></script>
 </body>
