@@ -96,26 +96,6 @@ body::after {
 }
 
 /* ==================== 顶部导航 / Stepper ==================== */
-.navbar {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: rgba(10, 10, 15, 0.72);
-  backdrop-filter: blur(18px) saturate(1.5);
-  -webkit-backdrop-filter: blur(18px) saturate(1.5);
-  border-bottom: 1px solid var(--border);
-}
-.nav-inner {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 0 24px;
-  height: 66px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-}
-
 /* ==================== 左侧边栏（显眼目录导航） ==================== */
 .app-shell {
   display: flex;
@@ -867,8 +847,7 @@ tr.best-row:hover { background: rgba(52, 211, 153, 0.14); }
 
 /* ==================== 响应式 ==================== */
 @media (max-width: 760px) {
-  .nav-inner { padding: 0 16px; height: 58px; gap: 10px; }
-  .logo { font-size: 14px; }
+    .logo { font-size: 14px; }
   .logo-mark { width: 28px; height: 28px; }
   .step-label { display: none; }
   .step { padding: 6px 8px; }
