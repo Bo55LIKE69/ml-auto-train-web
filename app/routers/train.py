@@ -34,6 +34,8 @@ class TrainRequest(BaseModel):
     fold: int = Field(DEFAULT_FOLD, description="交叉验证折数")
     sort_metric: str = Field("F1", description="排序指标（F1 / R2）")
     fe_opts: dict = Field(default_factory=dict, description="特征工程选项（缺失值策略/缩放/类别编码）")
+    tune: bool = Field(False, description="是否对最优模型做超参调优（RandomizedSearchCV）")
+    tune_budget: int = Field(20, description="RandomizedSearchCV 迭代次数上限（仅 tune=true 时生效）")
 
 
 @router.get("/models")
@@ -90,6 +92,8 @@ def train(req: TrainRequest):
                 fold=req.fold,
                 log=log,
                 fe_opts=req.fe_opts or None,
+                tune=req.tune,
+                tune_budget=req.tune_budget,
             )
             with _LOCK:
                 _TASKS[task_id] = {"status": "completed", "result": result, "log": log}

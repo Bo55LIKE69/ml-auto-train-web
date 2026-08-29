@@ -13,6 +13,14 @@ const modelPickBox = document.getElementById("modelPickBox");
 const fileId = new URLSearchParams(location.search).get("file_id");
 let modelCatalog = { classification: [], regression: [] };
 
+/* ---- 超参调优开关：勾选时展示预算输入 ---- */
+const tuneEnable = document.getElementById("tuneEnable");
+const tuneBudgetField = document.getElementById("tuneBudgetField");
+if (tuneEnable) {
+  tuneEnable.addEventListener("change", () => {
+    tuneBudgetField.hidden = !tuneEnable.checked;
+  });
+}
 /* ---- 加载概览，填充下拉框 ---- */
 async function loadOverview() {
   if (!fileId) {
@@ -117,6 +125,12 @@ configForm.addEventListener("submit", async e => {
   if (feScaler && feScaler.value !== "auto") fe.scaler = feScaler.value;
   if (feCat && feCat.value !== "auto") fe.cat_encoding = feCat.value;
   if (Object.keys(fe).length) body.fe_opts = fe;
+  const tuneEl = document.getElementById("tuneEnable");
+  if (tuneEl && tuneEl.checked) {
+    body.tune = true;
+    const bEl = document.getElementById("tuneBudget");
+    body.tune_budget = bEl ? parseInt(bEl.value, 10) || 20 : 20;
+  }
   try {
     const resp = await fetch("/api/train", {
       method: "POST",

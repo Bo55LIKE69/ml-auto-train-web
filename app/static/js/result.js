@@ -201,6 +201,28 @@ function render(r) {
   bestBox.innerHTML = `<b>最优模型：${esc(bm.name)}</b>（${esc(bm.reason)}）<br>
     测试集指标：${metricStr}`;
 
+  // 超参调优信息（v1.2.0）
+  const tuned = r.tuned || {};
+  if (tuned.enabled) {
+    const tBox = document.createElement("div");
+    tBox.className = "best tuned-box";
+    let tHtml = "<b>超参调优：</b>";
+    if (tuned.error) {
+      tHtml += `调优失败（${esc(tuned.error)}），沿用默认参数`;
+    } else if (tuned.improved) {
+      tHtml += `分数 ${tuned.base_score} → <b>${tuned.tuned_score}</b>（已采用调优参数）`;
+    } else {
+      tHtml += `调优未显著提升（${tuned.base_score}），沿用默认参数`;
+    }
+    if (tuned.best_params && Object.keys(tuned.best_params).length) {
+      const ps = Object.entries(tuned.best_params)
+        .map(([k, v]) => `${esc(k)}=${esc(String(v))}`).join("， ");
+      tHtml += `<br><span class='hint'>最优参数：${ps}</span>`;
+    }
+    tBox.innerHTML = tHtml;
+    bestBox.after(tBox);
+  }
+
   // 可视化
   const plotTitles = {
     confusion_matrix: "混淆矩阵（最优模型 · 测试集）",
@@ -209,6 +231,9 @@ function render(r) {
     metrics_comparison: "模型指标对比（测试集）",
     correlation: "特征相关性热力图（数据探索）",
     shap_summary: "SHAP 特征重要性（可解释性）",
+    learning_curve: "学习曲线（训练/验证得分 · 诊断过拟合）",
+    roc_curve: "ROC 曲线（宏平均 AUC · 分类）",
+    residual: "残差图（真实值 - 预测值 · 回归）",
   };
   plotArea.innerHTML = Object.entries(r.plots).map(([k, url]) => `
     <div class="plot-card">
@@ -238,6 +263,7 @@ function render(r) {
   dlReport.href = `/api/download/${r.task_id}/report.md`;
   dlScript.href = `/api/download/${r.task_id}/script.py`;
   dlJson.href = `/api/download/${r.task_id}/result.json`;
+  dlModel.href = `/api/download/${r.task_id}/model_artifacts.joblib`;
   dlCharts.href = `/api/download/${r.task_id}/charts`;
   dlAll.href = `/api/download/${r.task_id}/all`;
   // PDF：触发后端 LibreOffice 转换（若不存在则现转）

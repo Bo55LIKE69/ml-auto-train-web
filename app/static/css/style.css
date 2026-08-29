@@ -529,3 +529,84 @@ tr.best-row:hover { background: rgba(245, 165, 36, 0.15); }
   html { scroll-behavior: auto; }
   .card { animation: none; }
 }
+
+
+/* ==================== 通用表单输入 ==================== */
+.input {
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius, 8px);
+  color: var(--text, #E6E9EF);
+  font: 500 14px/1.5 "IBM Plex Sans", "Noto Sans SC", system-ui, sans-serif;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft, rgba(245, 165, 36, 0.12));
+}
+
+/* 开关行（超参调优等复选项） */
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  font-size: 14px;
+  color: var(--text-2, #B6BCC8);
+  cursor: pointer;
+}
+.switch-row input[type="checkbox"] {
+  width: 18px; height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ==================== 预测页拖拽上传区 ==================== */
+.drop-zone {
+  margin: 8px 0 18px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-lg, 14px);
+  background: linear-gradient(180deg, var(--surface), var(--bg-soft));
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+.drop-zone.dragover {
+  border-color: var(--accent);
+  background: var(--accent-soft, rgba(245, 165, 36, 0.12));
+  box-shadow: 0 0 24px var(--accent-glow, rgba(245, 165, 36, 0.34));
+}
+.drop-inner {
+  padding: 40px 20px;
+  text-align: center;
+}
+.drop-icon {
+  display: inline-flex;
+  width: 54px; height: 54px;
+  align-items: center; justify-content: center;
+  border: 1px solid var(--accent-line, rgba(245, 165, 36, 0.3));
+  border-radius: 12px;
+  background: var(--accent-soft, rgba(245, 165, 36, 0.12));
+  color: var(--accent);
+  margin-bottom: 14px;
+}
+.drop-icon svg { width: 26px; height: 26px; }
+.drop-title { font-size: 15px; font-weight: 600; color: var(--text, #E6E9EF); margin-bottom: 4px; }
+.drop-sub { font-size: 12.5px; color: var(--text-3, #8A93A3); margin-bottom: 16px; }
+
+/* 调优结果信息框 */
+.tuned-box {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--accent-line, rgba(245, 165, 36, 0.3));
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius, 8px);
+  background: var(--accent-soft, rgba(245, 165, 36, 0.1));
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--text-2, #B6BCC8);
+}

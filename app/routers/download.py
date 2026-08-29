@@ -28,6 +28,8 @@ ALLOWED_ARTIFACTS = {
     "shap_summary.png": "image/png",
     "pipeline_ir.json": "application/json",
     "training.log": "text/plain; charset=utf-8",
+    "model_artifacts.joblib": "application/octet-stream",
+    "predictions.csv": "text/csv; charset=utf-8",
 }
 
 

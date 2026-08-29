@@ -17,6 +17,7 @@ import time
 import uuid
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator
@@ -168,6 +169,57 @@ def _encode_y(task_type, y):
     return y_enc, None, None
 
 
+def _tune_best_model(task_type, model_name, model, X_train_t, y_train,
+                     budget=20, random_state=42):
+    """
+    对最优模型做轻量 RandomizedSearchCV 调优（毕设『模型优化』章节）。
+    仅在 best model 上做，控制迭代次数，避免阻塞。
+    返回 (tuned_model, best_params, tuned_score, better: bool)。
+    """
+    from sklearn.model_selection import RandomizedSearchCV
+
+    scoring = "f1_macro" if task_type == "classification" else "r2"
+    if task_type == "classification":
+        space = {
+            "逻辑回归": {"C": [0.01, 0.1, 1, 10], "max_iter": [2000]},
+            "K近邻": {"n_neighbors": [3, 5, 7, 9, 11], "weights": ["uniform", "distance"]},
+            "决策树": {"max_depth": [None, 5, 10, 20], "min_samples_split": [2, 5, 10]},
+            "随机森林": {"n_estimators": [100, 200, 300], "max_depth": [None, 10, 20]},
+            "极端随机树": {"n_estimators": [100, 200, 300], "max_depth": [None, 10, 20]},
+            "AdaBoost": {"n_estimators": [50, 100, 200], "learning_rate": [0.5, 1.0]},
+            "梯度提升": {"n_estimators": [100, 200], "learning_rate": [0.05, 0.1]},
+            "XGBoost": {"n_estimators": [100, 200], "max_depth": [3, 6], "learning_rate": [0.05, 0.1]},
+            "LightGBM": {"n_estimators": [100, 200], "num_leaves": [31, 63]},
+            "CatBoost": {"n_estimators": [100, 200], "learning_rate": [0.05, 0.1]},
+            "SVM": {"C": [0.1, 1, 10], "gamma": ["scale", "auto"]},
+        }
+    else:
+        space = {
+            "K近邻回归": {"n_neighbors": [3, 5, 7, 9, 11], "weights": ["uniform", "distance"]},
+            "决策树回归": {"max_depth": [None, 5, 10, 20], "min_samples_split": [2, 5, 10]},
+            "随机森林回归": {"n_estimators": [100, 200, 300], "max_depth": [None, 10, 20]},
+            "极端随机树回归": {"n_estimators": [100, 200, 300], "max_depth": [None, 10, 20]},
+            "AdaBoost回归": {"n_estimators": [50, 100, 200], "learning_rate": [0.5, 1.0]},
+            "梯度提升回归": {"n_estimators": [100, 200], "learning_rate": [0.05, 0.1]},
+            "XGBoost回归": {"n_estimators": [100, 200], "max_depth": [3, 6], "learning_rate": [0.05, 0.1]},
+            "LightGBM回归": {"n_estimators": [100, 200], "num_leaves": [31, 63]},
+            "CatBoost回归": {"n_estimators": [100, 200], "learning_rate": [0.05, 0.1]},
+        }
+    params = space.get(model_name)
+    if not params:
+        return model, getattr(model, "get_params", lambda: {})(), None, False
+    try:
+        n_iter = min(budget, max(4, int(np.prod([len(v) for v in params.values()]) / 2)))
+        search = RandomizedSearchCV(
+            model, params, n_iter=max(4, n_iter), scoring=scoring,
+            cv=3, n_jobs=-1, random_state=random_state, refit=True)
+        search.fit(X_train_t, y_train)
+        return (search.best_estimator_, search.best_params_,
+                float(search.best_score_), True)
+    except Exception:
+        return model, getattr(model, "get_params", lambda: {})(), None, False
+
+
 class LogCapture:
     """
     捕获 sklearn 训练输出，支持增量读取（规格书 §5.3）。
@@ -205,7 +257,8 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
                  test_size=TEST_SIZE, random_state=RANDOM_STATE,
                  out_dir=None, source_file=None, model_set=None,
                  fold=DEFAULT_FOLD, timeout=TRAIN_TIMEOUT_SECONDS,
-                 log=None, progress_cb=None, fe_opts=None):
+                 log=None, progress_cb=None, fe_opts=None, tune=False,
+                 tune_budget=20):
     """
     完整训练流水线入口（规格书 §5.3）。
 
@@ -222,6 +275,8 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
         log          LogCapture 实例（收集训练日志）
         progress_cb  进度回调 (stage, percent, message)
         fe_opts      特征工程选项 dict（缺失值策略/缩放/类别编码），None 用默认
+        tune         是否对最优模型做超参调优（RandomizedSearchCV）
+        tune_budget  RandomizedSearchCV 迭代次数上限
 
     返回：结果 dict（可直接 JSON 序列化，含模型对比、最优模型、图 URL 等）
     """
@@ -314,7 +369,51 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
 
     best_metrics = next(r["metrics"] for r in results if r["name"] == best_name)
     best_pred = preds[best_name]
+    best_model_ref = model_refs[best_name]
     _progress("train", 80, f"最优模型：{best_name}（{best_score}）")
+
+    # ---- 5.5 超参调优（可选，仅对最优模型做轻量 RandomizedSearchCV）----
+    tuned_info = {"enabled": False}
+    if tune:
+        _progress("tune", 82, f"对最优模型 {best_name} 启动超参调优（预算 {tune_budget} 次）...")
+        try:
+            tuned_model, tuned_params, tuned_cv, improved = _tune_best_model(
+                task_type, best_name, best_model_ref, X_train_t, y_train,
+                budget=tune_budget, random_state=random_state)
+            if improved:
+                best_model_ref = tuned_model
+                pred_t = tuned_model.predict(X_test_t)
+                if task_type == "classification":
+                    proba_t = tuned_model.predict_proba(X_test_t) if hasattr(tuned_model, "predict_proba") else None
+                    tm, _ = evaluate_classification(y_test, pred_t, proba_t)
+                    base_score = best_metrics["f1"]
+                    new_score = tm["f1"]
+                else:
+                    tm = evaluate_regression(y_test, pred_t)
+                    base_score = best_metrics["r2"]
+                    new_score = tm["r2"]
+                best_pred = pred_t
+                best_metrics = tm
+                # 用调优后分数更新对比表中的最优项
+                for r in results:
+                    if r["name"] == best_name:
+                        r["metrics"] = tm
+                tuned_info = {
+                    "enabled": True, "improved": new_score > base_score,
+                    "base_score": round(float(base_score), 4),
+                    "tuned_score": round(float(new_score), 4),
+                    "best_params": tuned_params,
+                }
+                _progress("tune", 85, f"调优完成：{best_name} 分数 {base_score} -> {new_score}")
+            else:
+                tuned_info = {"enabled": True, "improved": False,
+                              "base_score": best_score,
+                              "tuned_score": best_score,
+                              "best_params": tuned_params}
+                _progress("tune", 85, f"调优未显著提升 {best_name}，沿用默认参数")
+        except Exception as e:
+            log.append(f"! 超参调优失败（沿用默认模型）：{e}")
+            tuned_info = {"enabled": True, "improved": False, "error": str(e)}
 
     # ---- 6. 特征重要性（随机森林 top15）----
     importance = []
@@ -373,6 +472,50 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
         except Exception as e:
             log.append(f"! SHAP 图生成失败（已跳过）：{e}")
 
+        # 评估增强图：学习曲线 / ROC / 残差（毕设分析章节常用，异常跳过）
+        from app.ml.plots import (plot_learning_curve, plot_roc_curve,
+                                  plot_residual)
+        # 学习曲线（用未调优的 base 模型更贴近『默认 vs 调优』对比；调优后也画一份）
+        try:
+            if plot_learning_curve(model_refs[best_name], X_train_t, y_train,
+                                    X_test_t, y_test, out_dir / "learning_curve.png"):
+                plot_files["learning_curve"] = "learning_curve.png"
+        except Exception as e:
+            log.append(f"! 学习曲线生成失败（已跳过）：{e}")
+        if task_type == "classification":
+            try:
+                proba_best = best_model_ref.predict_proba(X_test_t) if hasattr(best_model_ref, "predict_proba") else None
+                if proba_best is not None and plot_roc_curve(y_test, proba_best, class_names,
+                                                             out_dir / "roc_curve.png"):
+                    plot_files["roc_curve"] = "roc_curve.png"
+            except Exception as e:
+                log.append(f"! ROC 曲线生成失败（已跳过）：{e}")
+        else:
+            try:
+                if plot_residual(y_test, best_pred, out_dir / "residual.png"):
+                    plot_files["residual"] = "residual.png"
+            except Exception as e:
+                log.append(f"! 残差图生成失败（已跳过）：{e}")
+
+        # 模型持久化（在线推理用）：preprocessor + best model + 元信息
+        try:
+            artifacts = {
+                "preprocessor": preprocessor,
+                "model": best_model_ref,
+                "model_name": best_name,
+                "task_type": task_type,
+                "class_names": class_names,
+                "feature_names": feature_names,
+                "target_col": target_col,
+                "tuned": tuned_info.get("enabled", False),
+                "random_state": random_state,
+            }
+            joblib.dump(artifacts, out_dir / "model_artifacts.joblib")
+            plot_files["model_file"] = "model_artifacts.joblib"
+            log.append("[model] 已持久化最优模型 model_artifacts.joblib（可在『在线预测』页推理新数据）")
+        except Exception as e:
+            log.append(f"! 模型持久化失败（已跳过）：{e}")
+
     result = {
         "task_id": task_id,
         "target_col": target_col,
@@ -390,11 +533,13 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
             "metrics": best_metrics,
             "reason": "F1(macro) 最高" if task_type == "classification" else "R² 最高",
         },
+        "tuned": tuned_info,
         "feature_importance": importance,
         "plots": {k: f"/api/download/{task_id}/{v}" for k, v in plot_files.items()},
         "report_url": f"/api/download/{task_id}/report.md",
         "docx_url": f"/api/download/{task_id}/report.docx",
         "script_url": f"/api/download/{task_id}/script.py",
+        "model_url": f"/api/download/{task_id}/model_artifacts.joblib",
         "training_time_total_seconds": round(time.time() - t_start, 2),
         "fold_count": fold,
         "session_id": random_state,
@@ -412,8 +557,8 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
         })
         ir = update_data_info(ir, df, meta["drop_cols"])
         best_params = {}
-        if best_name in model_refs and hasattr(model_refs[best_name], "get_params"):
-            best_params = model_refs[best_name].get_params()
+        if hasattr(best_model_ref, "get_params"):
+            best_params = best_model_ref.get_params()
         ir = update_model_results(ir, results, best_name, best_params, sort_metric)
         save_ir(ir, out_dir)
 

@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import STATIC_DIR, ensure_dirs
-from app.routers import ai, download, explore, result, tasks, train, upload
+from app.routers import ai, download, explore, predict, result, tasks, train, upload
 
 # 创建运行时目录（uploads / outputs / static）
 ensure_dirs()
@@ -33,6 +33,7 @@ app.include_router(upload.router)
 app.include_router(explore.router)
 app.include_router(train.router)
 app.include_router(tasks.router)
+app.include_router(predict.router)
 app.include_router(download.router)
 app.include_router(ai.router)
 app.include_router(result.router)

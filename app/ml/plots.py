@@ -136,6 +136,113 @@ def plot_correlation_heatmap(df, save_path, max_features=30,
     return True
 
 
+# ========== 评估增强图（毕设分析章节常用） ==========
+
+def plot_learning_curve(model, X_train, y_train, X_test, y_test, save_path,
+                        cv=5, title="学习曲线（训练/验证得分）"):
+    """
+    学习曲线：判断模型是否过拟合/欠拟合（导师常问点）。
+    用 sklearn.learning_curve 在训练集上递增样本量，绘制训练/交叉验证得分均值±标准差。
+    """
+    from sklearn.model_selection import learning_curve
+    from sklearn.base import clone
+
+    try:
+        sizes, train_s, val_s = learning_curve(
+            clone(model), X_train, y_train, cv=cv,
+            train_sizes=np.linspace(0.1, 1.0, 5), scoring="accuracy",
+            n_jobs=-1, random_state=42)
+        fig, ax = plt.subplots(figsize=(6.5, 4.6), dpi=120)
+        ax.plot(sizes, train_s.mean(1), "o-", color="#4C72B0", label="训练集得分")
+        ax.fill_between(sizes, train_s.mean(1) - train_s.std(1),
+                        train_s.mean(1) + train_s.std(1), alpha=0.12, color="#4C72B0")
+        ax.plot(sizes, val_s.mean(1), "o-", color="#2ecc71", label="交叉验证得分")
+        ax.fill_between(sizes, val_s.mean(1) - val_s.std(1),
+                        val_s.mean(1) + val_s.std(1), alpha=0.12, color="#2ecc71")
+        ax.set_xlabel("训练样本数")
+        ax.set_ylabel("得分")
+        ax.set_ylim(0, 1.05)
+        ax.set_title(title)
+        ax.legend(loc="lower right")
+        ax.grid(alpha=0.15)
+        fig.tight_layout()
+        fig.savefig(save_path)
+        plt.close(fig)
+        return True
+    except Exception:
+        try:
+            plt.close("all")
+        except Exception:
+            pass
+        return False
+
+
+def plot_roc_curve(y_test, y_proba, class_names, save_path,
+                  task_type="classification", title="ROC 曲线（宏平均 AUC）"):
+    """
+    ROC 曲线：分类任务宏平均（OvR）+ 每类曲线。
+    y_proba: predict_proba 结果 (n_samples, n_classes)。
+    """
+    from sklearn.metrics import roc_curve, auc
+    from sklearn.preprocessing import label_binarize
+
+    y_test = np.asarray(y_test).astype(int)
+    y_proba = np.asarray(y_proba)
+    n_classes = y_proba.shape[1]
+    if n_classes < 2:
+        return False
+    try:
+        y_bin = np.eye(n_classes)[y_test] if y_test.max() < n_classes else label_binarize(y_test, classes=range(n_classes))
+        fig, ax = plt.subplots(figsize=(5.8, 5.2), dpi=120)
+        colors = plt.cm.tab10(np.linspace(0, 1, max(n_classes, 2)))
+        # 宏平均 AUC：逐类计算后取均值（避免 ravel 长度不一致）
+        macro_fpr = np.linspace(0, 1, 100)
+        macro_tpr_interp = []
+        for i in range(n_classes):
+            fpr_i, tpr_i, _ = roc_curve(y_bin[:, i], y_proba[:, i])
+            macro_tpr_interp.append(np.interp(macro_fpr, fpr_i, tpr_i))
+            ax.plot(fpr_i, tpr_i, color=colors[i], lw=1.4,
+                    label=f"{class_names[i] if i < len(class_names) else i} (AUC={auc(fpr_i, tpr_i):.3f})")
+        mean_tpr = np.mean(macro_tpr_interp, axis=0)
+        macro_auc = auc(macro_fpr, mean_tpr)
+        ax.plot(macro_fpr, mean_tpr, "k--", lw=2, label=f"宏平均 (AUC={macro_auc:.3f})")
+        ax.plot([0, 1], [0, 1], "r:", lw=1)
+        ax.set_xlabel("假正率 (FPR)")
+        ax.set_ylabel("真正率 (TPR)")
+        ax.set_title(title)
+        ax.legend(loc="lower right", fontsize=8)
+        fig.tight_layout()
+        fig.savefig(save_path)
+        plt.close(fig)
+        return True
+    except Exception:
+        try:
+            plt.close("all")
+        except Exception:
+            pass
+        return False
+
+
+def plot_residual(y_true, y_pred, save_path, title="残差图（真实值 vs 预测值）"):
+    """
+    回归残差图：残差(真实-预测) vs 预测值，用于检测异方差/非线性。
+    """
+    y_true = np.asarray(y_true, dtype=float)
+    y_pred = np.asarray(y_pred, dtype=float)
+    resid = y_true - y_pred
+    fig, ax = plt.subplots(figsize=(6, 4.6), dpi=120)
+    ax.scatter(y_pred, resid, alpha=0.6, edgecolors="k", linewidths=0.5)
+    ax.axhline(0, color="r", ls="--", lw=1.5)
+    ax.set_xlabel("预测值")
+    ax.set_ylabel("残差 (真实 - 预测)")
+    ax.set_title(title)
+    ax.grid(alpha=0.15)
+    fig.tight_layout()
+    fig.savefig(save_path)
+    plt.close(fig)
+    return True
+
+
 def plot_shap_summary(model, X_sample, feature_names, save_path,
                       title="SHAP 特征重要性（BeeSwarm）"):
     """
