@@ -1,6 +1,7 @@
 # 📊 表格机器学习自动训练工具（Web版）
 
-面向**本科毕设学生**的表格数据机器学习自动训练 Web 工具：
+> **作者**：谢泓铎 · GIS实验室  
+> 面向**本科毕设学生**的表格数据机器学习自动训练 Web 工具：
 上传 CSV / Excel 数据集，选择目标标签，系统自动完成
 **数据探查 → 预处理 → 多模型对比训练 → 评估 → 可视化 → 生成 Markdown 实验报告**，
 并可下载**可复现的 Python 训练脚本**。
@@ -102,3 +103,10 @@ FastAPI · pandas · scikit-learn · matplotlib · 原生 HTML/JS
 ## 📄 许可
 
 MIT
+
+## 👤 作者
+
+**谢泓铎** · GIS实验室
+
+- GitHub：[@Bo55LIKE69](https://github.com/Bo55LIKE69)
+- 项目仓库：<https://github.com/Bo55LIKE69/ml-auto-train-web>
