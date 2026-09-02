@@ -13,11 +13,39 @@ from sklearn.metrics import (accuracy_score, confusion_matrix, cohen_kappa_score
                              precision_score, r2_score, recall_score,
                              roc_auc_score)
 
+# CV 评分函数（分类用 macro-F1，回归用 R²），与 run_pipeline 的选优口径一致
+CV_SCORING = {"classification": "f1_macro", "regression": "r2"}
+
+
+def _safe_auc(y_true, y_proba):
+    """
+    计算 AUC：二分类取正类概率，多分类用 one-vs-rest macro。
+    任何异常（测试集缺类、概率矩阵列数不匹配）都返回 None，不抛错。
+    """
+    if y_proba is None:
+        return None
+    y_proba = np.asarray(y_proba)
+    if y_proba.ndim != 2 or y_proba.shape[1] < 2:
+        return None
+    classes = np.unique(y_true)
+    try:
+        if len(classes) == 2:
+            # 二分类：正类概率列。若概率列数与真实类别数不一致（测试集恰好只含一类），放弃
+            if y_proba.shape[1] != 2:
+                return None
+            return round(float(roc_auc_score(y_true, y_proba[:, 1])), 4)
+        if len(classes) > 2 and y_proba.shape[1] >= len(classes):
+            return round(float(roc_auc_score(
+                y_true, y_proba, multi_class="ovr", average="macro")), 4)
+    except Exception:
+        return None
+    return None
+
 
 def evaluate_classification(y_true, y_pred, y_proba=None):
     """
     计算分类指标与混淆矩阵。
-    y_proba 传入 predict_proba 结果时，额外计算二分类 AUC。
+    y_proba 传入 predict_proba 结果时，额外计算 AUC（二分类/多分类均可）。
     返回 (metrics dict, confusion matrix list)
     """
     metrics = {
@@ -30,10 +58,8 @@ def evaluate_classification(y_true, y_pred, y_proba=None):
             y_true, y_pred, average="macro", zero_division=0)), 4),
         "kappa": round(float(cohen_kappa_score(y_true, y_pred)), 4),
         "mcc": round(float(matthews_corrcoef(y_true, y_pred)), 4),
-        "auc": None,
+        "auc": _safe_auc(y_true, y_proba),
     }
-    if y_proba is not None and len(np.unique(y_true)) == 2:
-        metrics["auc"] = round(float(roc_auc_score(y_true, y_proba[:, 1])), 4)
     cm = confusion_matrix(y_true, y_pred).tolist()
     return metrics, cm
 

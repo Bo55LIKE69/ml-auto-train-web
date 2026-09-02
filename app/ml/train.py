@@ -34,7 +34,10 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
-from app.config import (DEFAULT_FOLD, DEFAULT_MODEL_SET, RANDOM_STATE,
+from app.config import (CV_ENABLED, CV_MAX_SAMPLES, CV_MIN_SAMPLES,
+                        DEFAULT_FOLD, DEFAULT_MODEL_SET,
+                        FALLBACK_MODEL_SET_MINIMAL, FALLBACK_MODEL_SET_SMALL,
+                        RANDOM_STATE, SVM_LINEAR_THRESHOLD,
                         TEST_SIZE, TRAIN_TIMEOUT_SECONDS)
 from app.ml.evaluate import evaluate_classification, evaluate_regression
 from app.ml.ir_recorder import (new_ir, save_ir, update_data_info,
@@ -90,11 +93,65 @@ MODEL_CATALOG = {
 }
 
 
-def _build_models(task_type: str, model_set: list = None) -> dict:
+def model_status(task_type: str, model_set=None) -> dict:
+    """
+    返回模型可用性清单：区分「已构建」与「因依赖缺失而不可用」的模型。
+    供 /api/deps 运行环境自检使用，让界面能明确告诉学生
+    "XGBoost 不可用：未安装 xgboost 库"，而不是让模型凭空消失。
+    """
+    model_set = _resolve_model_set(model_set)
+    catalog = MODEL_CATALOG.get(task_type, {})
+    built = (_build_models(task_type, model_set)
+             if task_type == "classification" else _build_regressors(model_set))
+    built_names = set(built.keys())
+
+    available, unavailable = [], []
+    for key, meta in catalog.items():
+        if key not in model_set:
+            continue          # 未选入本次模型集，不算不可用
+        if meta["name"] in built_names:
+            available.append({"key": key, "name": meta["name"],
+                              "desc": meta.get("desc", "")})
+        else:
+            unavailable.append({
+                "key": key, "name": meta["name"],
+                "pip_name": key if key in ("xgboost", "lightgbm", "catboost") else None,
+                "reason": f"未安装 {key} 库，执行 pip install {key} 后可用",
+            })
+    return {"available": available, "unavailable": unavailable,
+            "total": len(available) + len(unavailable),
+            "ready": len(available)}
+
+
+def _resolve_model_set(model_set) -> list:
+    """
+    规范化模型集参数：None / 空 / 非法类型统一回退为 DEFAULT_MODEL_SET。
+    修复：直接传 None 时 `"lr" in None` 会抛 TypeError。
+    """
+    if not model_set:
+        return list(DEFAULT_MODEL_SET)
+    if isinstance(model_set, str):
+        return [model_set]
+    return list(model_set)
+
+
+def _svm_kernel(n_samples=None) -> str:
+    """
+    SVM 核函数选择：RBF 在小样本上更准，但复杂度约 O(n²)~O(n³)；
+    样本数超过阈值时切线性核，避免学生等几十分钟以为卡死。
+    """
+    if n_samples is not None and n_samples > SVM_LINEAR_THRESHOLD:
+        return "linear"
+    return "rbf"
+
+
+def _build_models(task_type: str, model_set: list = None, n_samples=None) -> dict:
     """
     按规格书附录 A 构建模型字典。
     model_set 为缩写列表（如 ["lr","rf","xgboost"]），None 表示全部可用。
+    n_samples 用于 SVM 核函数选择（大数据自动切线性核）。
     """
+    model_set = _resolve_model_set(model_set)
     rs = RANDOM_STATE
     clf = {}
     if "lr" in model_set:
@@ -123,12 +180,14 @@ def _build_models(task_type: str, model_set: list = None) -> dict:
         clf["CatBoost"] = CatBoostClassifier(n_estimators=200, random_state=rs,
                                              verbose=False, allow_writing_files=False)
     if "svm" in model_set:
-        clf["SVM"] = SVC(probability=True, random_state=rs)
+        clf["SVM"] = SVC(kernel=_svm_kernel(n_samples), probability=True,
+                         random_state=rs)
     return clf
 
 
-def _build_regressors(model_set: list = None) -> dict:
+def _build_regressors(model_set: list = None, n_samples=None) -> dict:
     """回归模型集（规格书附录 A 回归部分）。"""
+    model_set = _resolve_model_set(model_set)
     rs = RANDOM_STATE
     reg = {}
     if "lr" in model_set:
@@ -167,6 +226,173 @@ def _encode_y(task_type, y):
         return y_enc, encoder, [str(c) for c in encoder.classes_]
     y_enc = pd.to_numeric(y, errors="coerce").astype(float).values
     return y_enc, None, None
+
+
+def _safe_stratify(y, warnings: list):
+    """
+    分层抽样安全性检查。
+    当目标列存在样本数 < 2 的稀有类别时，sklearn 的 stratify 会直接抛
+    ValueError（"least populated class has only 1 member"），导致整个任务失败。
+    此处改为：能分层就分层，不能分层则降级为随机划分并明确告知用户。
+    返回 (stratify 参数, 提示信息|None)
+    """
+    _, counts = np.unique(y, return_counts=True)
+    if counts.size == 0:
+        return None, "目标列无有效取值，无法划分"
+    if counts.min() >= 2:
+        return y, None
+    n_rare = int((counts < 2).sum())
+    msg = (f"目标列有 {n_rare} 个类别的样本数不足 2 条，无法按类别分层抽样，"
+           f"已自动改用随机划分（建议补充稀有类别样本，或将稀有类别合并为『其他』）")
+    if warnings is not None:
+        warnings.append("! " + msg)
+    return None, msg
+
+
+def _validate_classification_target(y, warnings: list):
+    """
+    分类任务目标列合法性校验：只有 1 个类别时无法训练，给出可读的错误提示。
+    同时提示极端不平衡（少数类占比 < 5%）。
+    """
+    classes, counts = np.unique(y, return_counts=True)
+    if classes.size < 2:
+        raise ValueError(
+            "目标列只有 1 个取值，无法进行分类任务。"
+            "请换一个目标列，或将任务类型改为『回归』"
+            + ("（当前唯一取值：" + str(classes[0]) + "）" if classes.size else "")
+        )
+    if classes.size > 1:
+        minority_ratio = counts.min() / counts.sum()
+        if minority_ratio < 0.05:
+            warnings.append(
+                f"! 类别严重不平衡：最少类别仅占 {minority_ratio:.1%}"
+                f"（{counts.min()}/{counts.sum()} 条），"
+                f"模型可能偏向多数类，建议过采样或调整类别权重"
+            )
+
+
+def _resolve_cv_fold(task_type, y, fold, n_samples, warnings: list):
+    """
+    确定交叉验证的实际折数与是否启用。
+    护栏：
+      1) 显式 fold < 2 视为不启用
+      2) 样本数 > CV_MAX_SAMPLES 自动跳过（大样本上 K 折代价过高）
+      3) 分类任务折数不能超过最少类别的样本数（StratifiedKFold 硬约束）
+      4) 折数不能超过样本数
+    返回 (实际折数|None, 跳过原因|None)
+    """
+    if not fold or int(fold) < 2:
+        return None, "未启用（fold < 2）"
+    fold = int(fold)
+    if n_samples > CV_MAX_SAMPLES:
+        return None, f"样本数 {n_samples} 超过 CV 上限 {CV_MAX_SAMPLES}，已自动跳过"
+    if n_samples < max(CV_MIN_SAMPLES, fold * 2):
+        return None, f"样本数 {n_samples} 过少，K 折方差过大，已自动跳过"
+
+    if task_type == "classification":
+        _, counts = np.unique(y, return_counts=True)
+        if counts.size and counts.min() < 2:
+            return None, "存在样本数不足 2 的稀有类别，无法做分层 K 折，已跳过"
+        # StratifiedKFold：每折每个类别至少 1 条 → 折数不能超过最少类别样本数
+        fold = min(fold, int(counts.min()))
+    fold = min(fold, n_samples)
+    if fold < 2:
+        return None, "折数被压缩至 1，无法交叉验证"
+    return fold, None
+
+
+def _cross_validate(task_type, model, preprocessor, X, y, fold, random_state):
+    """
+    对单个模型做 K 折交叉验证，返回 (均值, 标准差)。
+    关键：用 Pipeline(clone(preprocessor), clone(model)) 包装，
+    使每一折内部独立拟合预处理，彻底避免数据泄漏（答辩必问点）。
+    任何异常都向上传播，由调用方决定是否计入结果。
+    """
+    from sklearn.base import clone
+    from sklearn.model_selection import cross_val_score
+    from sklearn.pipeline import Pipeline as SkPipeline
+
+    if task_type == "classification":
+        from sklearn.model_selection import StratifiedKFold
+        cv = StratifiedKFold(n_splits=fold, shuffle=True, random_state=random_state)
+        scoring = "f1_macro"
+    else:
+        from sklearn.model_selection import KFold
+        cv = KFold(n_splits=fold, shuffle=True, random_state=random_state)
+        scoring = "r2"
+
+    pipe = SkPipeline([("preprocessor", clone(preprocessor)), ("model", clone(model))])
+    scores = np.asarray(cross_val_score(pipe, X, y, cv=cv, scoring=scoring,
+                                        n_jobs=-1), dtype=float)
+    # 某些折可能因类别缺失/指标无定义而返回 NaN，必须剔除后再聚合，
+    # 否则 NaN 会污染均值并让模型选优静默失效（NaN 比较恒为 False）
+    scores = scores[~np.isnan(scores)]
+    if scores.size == 0:
+        raise ValueError(f"{fold} 折交叉验证全部失败（评分无法计算）")
+    return float(np.mean(scores)), float(np.std(scores))
+
+
+def _extract_importance(model, feature_names, top=15):
+    """
+    从【任意】模型提取特征重要性，按以下优先级：
+      1) 树/集成模型的 feature_importances_
+      2) 线性模型的 |coef_|（多分类取各类绝对值均值）
+      3) 排列重要性不适用（代价高），不支持则返回空
+    返回 (重要性列表, 来源说明)
+    """
+    imp = None
+    source = None
+    if hasattr(model, "feature_importances_"):
+        imp = np.asarray(model.feature_importances_, dtype=float)
+        source = "feature_importances_"
+    elif hasattr(model, "coef_"):
+        coef = np.asarray(model.coef_, dtype=float)
+        if coef.ndim == 1:
+            imp = np.abs(coef)
+        elif coef.ndim == 2:
+            # 多分类：shape (n_classes, n_features) → 各类绝对值取均值
+            imp = np.abs(coef).mean(axis=0)
+        else:
+            imp = np.abs(coef).reshape(coef.shape[0], -1).mean(axis=0)
+        source = "coef_ (绝对值)"
+
+    if imp is None or imp.size == 0:
+        return [], None
+    # 维度对齐保护：独热编码后特征名数量可能与系数长度不同
+    n = min(len(imp), len(feature_names))
+    if n == 0:
+        return [], None
+    imp = imp[:n]
+    names = list(feature_names)[:n]
+    order = np.argsort(imp)[::-1][:top]
+    return (
+        [{"feature": str(names[i]), "importance": round(float(imp[i]), 6)}
+         for i in order],
+        source,
+    )
+
+
+def _train_one(name, model, task_type, X_train_t, y_train, X_test_t, y_test):
+    """
+    训练并评估【单个】模型，异常不外抛。
+    返回 (metrics, y_pred, error)：error 非 None 表示该模型失败。
+    ★ 这是「单模型失败不拖垮全局」的关键：任何模型崩溃都被收敛为一条错误记录。
+    """
+    t0 = time.time()
+    try:
+        model.fit(X_train_t, y_train)
+        y_pred = model.predict(X_test_t)
+        if task_type == "classification":
+            y_proba = (model.predict_proba(X_test_t)
+                       if hasattr(model, "predict_proba") else None)
+            metrics, _cm = evaluate_classification(y_test, y_pred, y_proba)
+        else:
+            metrics = evaluate_regression(y_test, y_pred)
+        metrics["train_time_s"] = round(time.time() - t0, 2)
+        return metrics, y_pred, None
+    except Exception as e:
+        msg = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+        return None, None, msg
 
 
 def _tune_best_model(task_type, model_name, model, X_train_t, y_train,
@@ -258,7 +484,7 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
                  out_dir=None, source_file=None, model_set=None,
                  fold=DEFAULT_FOLD, timeout=TRAIN_TIMEOUT_SECONDS,
                  log=None, progress_cb=None, fe_opts=None, tune=False,
-                 tune_budget=20):
+                 tune_budget=20, use_cv=None):
     """
     完整训练流水线入口（规格书 §5.3）。
 
@@ -277,13 +503,16 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
         fe_opts      特征工程选项 dict（缺失值策略/缩放/类别编码），None 用默认
         tune         是否对最优模型做超参调优（RandomizedSearchCV）
         tune_budget  RandomizedSearchCV 迭代次数上限
+        use_cv       是否启用 K 折交叉验证，None 表示跟随 config.CV_ENABLED
 
     返回：结果 dict（可直接 JSON 序列化，含模型对比、最优模型、图 URL 等）
     """
     t_start = time.time()
     out_dir = Path(out_dir) if out_dir else None
     log = log or LogCapture()
-    model_set = list(model_set) if model_set else list(DEFAULT_MODEL_SET)
+    model_set = _resolve_model_set(model_set)
+    if use_cv is None:
+        use_cv = CV_ENABLED
 
     def _progress(stage, pct, msg):
         log.append(f"[{stage}] {msg}")
@@ -309,10 +538,19 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
         if not mask.all():
             meta["warnings"].append(f"目标列有 {int((~mask).sum())} 行无法转为数值，已剔除")
             X, y_enc = X[mask], y_enc[mask]
+        if len(np.unique(y_enc)) < 2:
+            raise ValueError("目标列有效取值不足 2 个，无法进行回归任务")
+    else:
+        # 分类任务：单类别 / 极端不平衡提前拦下，给出人话提示
+        _validate_classification_target(y_enc, meta["warnings"])
     _progress("encode", 10, "目标列编码完成")
 
-    # ---- 3. 数据划分（分类按标签分层抽样）----
-    stratify = y_enc if task_type == "classification" else None
+    # ---- 3. 数据划分（分类按标签分层抽样，稀有类别自动降级为随机划分）----
+    stratify = None
+    if task_type == "classification":
+        stratify, strat_note = _safe_stratify(y_enc, meta["warnings"])
+        if strat_note:
+            _progress("split", 12, strat_note)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y_enc, test_size=test_size, random_state=random_state, stratify=stratify)
 
@@ -323,54 +561,120 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
     feature_names = [str(n) for n in preprocessor.get_feature_names_out()]
     _progress("split", 15, f"划分完成：训练集 {X_train_t.shape[0]}，测试集 {X_test_t.shape[0]}，预处理后 {len(feature_names)} 维")
 
-    # ---- 5. 批量训练（规格书：超时降级）----
-    models = (_build_models(task_type, model_set)
-              if task_type == "classification" else _build_regressors(model_set))
+    # ---- 4.5 交叉验证可行性判定（护栏：大样本/稀有类别自动跳过）----
+    cv_fold, cv_skip_reason = None, "未启用"
+    if use_cv:
+        cv_fold, cv_skip_reason = _resolve_cv_fold(
+            task_type, y_enc, fold, len(X), meta["warnings"])
+    if cv_fold:
+        _progress("cv", 16, f"启用 {cv_fold} 折交叉验证：每个模型额外评估 {cv_fold} 次")
+    else:
+        _progress("cv", 16, f"交叉验证未启用 — {cv_skip_reason}")
+
+    # ---- 5. 批量训练（逐模型异常隔离 + 超时降级）----
+    n_samples = len(X)
+    models = (_build_models(task_type, model_set, n_samples=n_samples)
+              if task_type == "classification"
+              else _build_regressors(model_set, n_samples=n_samples))
     if not models:
         raise ValueError("没有可用的模型（所选模型集为空或依赖未安装）")
 
     results = []
+    failures = []
     model_refs, preds = {}, {}
     best_name, best_score = None, -float("inf")
-    rf_model = None
     total = len(models)
+    timed_out = False
+    _score_key = "F1" if task_type == "classification" else "R2"
+
+    def _run_one(name, model, idx_label=""):
+        """训练+评估+CV 单个模型并登记结果，返回是否成功。"""
+        nonlocal best_name, best_score
+        metrics, y_pred, err = _train_one(
+            name, model, task_type, X_train_t, y_train, X_test_t, y_test)
+        if err is not None:
+            failures.append({"name": name, "error": err})
+            log.append(f"    {name:14s} -> 失败（已跳过，不影响其他模型）：{err}")
+            return False
+
+        # K 折交叉验证（失败不影响 holdout 主指标）
+        if cv_fold:
+            try:
+                cv_mean, cv_std = _cross_validate(
+                    task_type, model, preprocessor, X, y_enc, cv_fold, random_state)
+                metrics["cv_mean"] = round(cv_mean, 4)
+                metrics["cv_std"] = round(cv_std, 4)
+                log.append(f"    {name:14s} -> {cv_fold}折CV {cv_mean:.4f} ± {cv_std:.4f}")
+            except Exception as e:
+                log.append(f"    {name:14s} -> CV 失败（已跳过）：{e}")
+
+        model_refs[name], preds[name] = model, y_pred
+        results.append({"name": name, "metrics": metrics})
+        score = metrics.get("f1", metrics.get("r2")) or 0.0
+        log.append(f"    {name:14s} -> {_score_key}={score} 耗时 {metrics['train_time_s']}s"
+                   + idx_label)
+        # CV 启用时以 K 折均值为选优依据：单次 holdout 划分偶然性大，
+        # K 折均值更能反映模型真实泛化能力（毕设方法章节的标准写法）
+        rank_score = metrics["cv_mean"] if (cv_fold and "cv_mean" in metrics) else score
+        if rank_score > best_score:
+            best_name, best_score = name, rank_score
+        return True
 
     for i, (name, model) in enumerate(models.items(), 1):
         if time.time() - t_start > timeout:
+            timed_out = True
             log.append(f"! 训练超时（>{timeout}s），中止剩余模型")
             break
-        _progress("train", 15 + int(60 * (i - 1) / max(total, 1)),
+        _progress("train", 16 + int(58 * (i - 1) / max(total, 1)),
                   f"训练模型 {i}/{total}：{name}")
-        t_m = time.time()
-        model.fit(X_train_t, y_train)
-        y_pred = model.predict(X_test_t)
-        model_refs[name], preds[name] = model, y_pred
+        _run_one(name, model, idx_label=f"（{i}/{total}）")
 
-        if task_type == "classification":
-            y_proba = model.predict_proba(X_test_t) if hasattr(model, "predict_proba") else None
-            metrics, cm = evaluate_classification(y_test, y_pred, y_proba)
-            score = metrics["f1"]
-        else:
-            metrics = evaluate_regression(y_test, y_pred)
-            cm = None
-            score = metrics["r2"]
-        metrics["train_time_s"] = round(time.time() - t_m, 2)
-        results.append({"name": name, "metrics": metrics})
-        _score_key = "F1" if task_type == "classification" else "R2"
-        log.append(f"    {name:14s} -> {_score_key}={metrics.get('f1', metrics.get('r2'))} 耗时 {metrics['train_time_s']}s")
-
-        if score > best_score:
-            best_name, best_score = name, score
-        if isinstance(model, (RandomForestClassifier, RandomForestRegressor)):
-            rf_model = model
+    # ---- 5.2 超时降级：成功模型过少时，用精简模型集补跑 ----
+    # 注意：降级阶段使用【独立的时间预算】。若沿用 t_start，预算早已耗尽，
+    # 补跑会在第一个模型处立刻放弃，降级形同虚设。
+    if timed_out and len(results) < 3:
+        fb_deadline = time.time() + timeout
+        log.append(f"! 超时但仅完成 {len(results)}/{total} 个模型，启动降级补跑"
+                   f"（额外预算 {timeout}s）")
+        for fallback_set in (FALLBACK_MODEL_SET_SMALL, FALLBACK_MODEL_SET_MINIMAL):
+            todo = [m for m in fallback_set if m not in model_refs]
+            if not todo:
+                break
+            fb_models = (_build_models(task_type, todo, n_samples=n_samples)
+                         if task_type == "classification"
+                         else _build_regressors(todo, n_samples=n_samples))
+            # ★ 必须用【中文模型名】去重：todo 是英文缩写（如 "lr"），
+            #   而 model_refs 的键是中文名（如 "逻辑回归"），按缩写过滤永远判断
+            #   为"未训练"，会把已训完的模型再训一遍，对比表出现重复行。
+            fb_models = {n: m for n, m in fb_models.items() if n not in model_refs}
+            if not fb_models:
+                continue
+            _progress("fallback", 76, f"超时降级：补跑精简模型集 {list(fb_models)}")
+            for name, model in fb_models.items():
+                if time.time() > fb_deadline:
+                    log.append("! 降级预算耗尽，停止补跑")
+                    break
+                _run_one(name, model, idx_label="（降级补跑）")
+            if len(results) >= 3:
+                break
 
     if best_name is None:
-        raise RuntimeError("所有模型均训练失败")
+        detail = "；".join(f"{f['name']}({f['error']})" for f in failures[:3])
+        raise RuntimeError(
+            f"所有 {total} 个模型均训练失败，请检查数据或模型选择。失败原因：{detail}")
+
+    # 对比表按选优口径降序排列，便于直接抄进论文
+    if cv_fold:
+        results.sort(key=lambda r: r["metrics"].get("cv_mean", -9e9), reverse=True)
+    else:
+        results.sort(key=lambda r: r["metrics"].get(
+            "f1", r["metrics"].get("r2", -9e9)) or -9e9, reverse=True)
 
     best_metrics = next(r["metrics"] for r in results if r["name"] == best_name)
     best_pred = preds[best_name]
     best_model_ref = model_refs[best_name]
-    _progress("train", 80, f"最优模型：{best_name}（{best_score}）")
+    _progress("train", 80, f"最优模型：{best_name}（{best_score}）"
+              + (f"，{len(failures)} 个模型失败已跳过" if failures else ""))
 
     # ---- 5.5 超参调优（可选，仅对最优模型做轻量 RandomizedSearchCV）----
     tuned_info = {"enabled": False}
@@ -415,15 +719,42 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
             log.append(f"! 超参调优失败（沿用默认模型）：{e}")
             tuned_info = {"enabled": True, "improved": False, "error": str(e)}
 
-    # ---- 6. 特征重要性（随机森林 top15）----
-    importance = []
-    if rf_model is not None:
-        imp = np.asarray(rf_model.feature_importances_)
-        order = np.argsort(imp)[::-1][:15]
-        importance = [
-            {"feature": feature_names[i], "importance": round(float(imp[i]), 4)}
-            for i in order
-        ]
+    # ---- 6. 特征重要性：优先取【最优模型】自身，随机森林仅作兜底 ----
+    # 修复点：旧实现强制用随机森林，导致 (a) 模型集不含 rf 时重要性为空，
+    # (b) 展示的重要性与报告所述"最优模型"不是同一个模型。
+    rf_fallback = model_refs.get("随机森林") or model_refs.get("随机森林回归")
+
+    def _model_tag(m):
+        if m is None:
+            return None
+        if m is best_model_ref:
+            return best_name
+        if m is rf_fallback:
+            return "随机森林"
+        return "模型"
+
+    # 图与表保持同源：优先选用能出图的模型（具备 feature_importances_）
+    imp_model = None
+    for cand in (best_model_ref, rf_fallback):
+        if cand is not None and hasattr(cand, "feature_importances_"):
+            imp_model = cand
+            break
+
+    importance, importance_source = [], None
+    if imp_model is not None:
+        importance, src = _extract_importance(imp_model, feature_names)
+        if importance:
+            importance_source = f"{_model_tag(imp_model)}（{src}）"
+    else:
+        # 线性模型只有 coef_：仍可出表，但不出图（避免图与表口径不一致）
+        importance, src = _extract_importance(best_model_ref, feature_names)
+        if importance:
+            importance_source = (f"{best_name}（{src}）；该模型无 "
+                                 f"feature_importances_，未生成重要性图")
+    if importance:
+        log.append(f"[importance] 特征重要性来源：{importance_source}")
+    else:
+        log.append("! 最优模型不支持特征重要性（无 feature_importances_ 与 coef_），已跳过")
 
     # ---- 7. 产物落盘：图表 / 报告 / 复现脚本 / pipeline_ir ----
     task_id = out_dir.name if out_dir else uuid.uuid4().hex[:12]
@@ -438,9 +769,11 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
             p = out_dir / "scatter.png"
             plot_scatter(y_test, best_pred, p)
             plot_files["scatter"] = p.name
-        if rf_model is not None:
+        if imp_model is not None:
             p = out_dir / "feature_importance.png"
-            plot_feature_importance(rf_model, feature_names, p)
+            plot_feature_importance(
+                imp_model, feature_names, p,
+                title=f"特征重要性（{_model_tag(imp_model)}）")
             plot_files["feature_importance"] = p.name
 
         # 指标对比图（规格书第四章要求）
@@ -478,7 +811,8 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
         # 学习曲线（用未调优的 base 模型更贴近『默认 vs 调优』对比；调优后也画一份）
         try:
             if plot_learning_curve(model_refs[best_name], X_train_t, y_train,
-                                    X_test_t, y_test, out_dir / "learning_curve.png"):
+                                    X_test_t, y_test, out_dir / "learning_curve.png",
+                                    cv=cv_fold or 5, task_type=task_type):
                 plot_files["learning_curve"] = "learning_curve.png"
         except Exception as e:
             log.append(f"! 学习曲线生成失败（已跳过）：{e}")
@@ -531,17 +865,32 @@ def run_pipeline(df, target_col, task_type="auto", id_cols=None,
         "best_model": {
             "name": best_name,
             "metrics": best_metrics,
-            "reason": "F1(macro) 最高" if task_type == "classification" else "R² 最高",
+            "reason": (
+                f"{'F1(macro)' if task_type == 'classification' else 'R²'}"
+                + (f" 的 {cv_fold} 折交叉验证均值最高" if cv_fold
+                   else " 最高（测试集留出法）")
+            ),
         },
         "tuned": tuned_info,
         "feature_importance": importance,
+        "feature_importance_source": importance_source,
+        # 交叉验证：记录实际生效折数与跳过原因，杜绝"声称做了 CV 其实没做"
+        "cv": {
+            "enabled": cv_fold is not None,
+            "fold": cv_fold,
+            "scoring": "f1_macro" if task_type == "classification" else "r2",
+            "skip_reason": None if cv_fold else cv_skip_reason,
+        },
+        # 训练失败但被跳过、未影响整体的模型（旧实现会让整个任务失败）
+        "failed_models": failures,
         "plots": {k: f"/api/download/{task_id}/{v}" for k, v in plot_files.items()},
         "report_url": f"/api/download/{task_id}/report.md",
         "docx_url": f"/api/download/{task_id}/report.docx",
         "script_url": f"/api/download/{task_id}/script.py",
         "model_url": f"/api/download/{task_id}/model_artifacts.joblib",
         "training_time_total_seconds": round(time.time() - t_start, 2),
-        "fold_count": fold,
+        # fold_count 记录真实生效的折数（未启用 CV 时为 None），避免误导
+        "fold_count": cv_fold,
         "session_id": random_state,
     }
 

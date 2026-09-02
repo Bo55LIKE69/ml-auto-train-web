@@ -5,12 +5,14 @@
 """
 import json
 import threading
+import time
 import uuid
 from pathlib import Path
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from typing import Optional
 
 from app.config import (DEFAULT_FE_OPTS, DEFAULT_FOLD, DEFAULT_MODEL_SET,
                         OUTPUT_DIR, UPLOAD_DIR)
@@ -20,8 +22,65 @@ from app.ml.train import (LogCapture, MODEL_CATALOG, run_pipeline)
 router = APIRouter(prefix="/api", tags=["训练"])
 
 # 后台任务注册表：{task_id: {status, result, log: LogCapture, error}}
+# 注意：仅存内存，服务重启即清空 —— 因此所有状态变更都会同步落盘到
+# outputs/<task_id>/status.json，重启后仍可查询（见 recover_interrupted_tasks）。
 _TASKS = {}
 _LOCK = threading.Lock()
+
+
+def _write_status(task_id: str, status: str, **extra):
+    """将任务状态落盘，保证服务重启后仍可查询。失败不影响主流程。"""
+    try:
+        out_dir = OUTPUT_DIR / task_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        data = {"task_id": task_id, "status": status,
+                "updated_at": time.time(), **extra}
+        (out_dir / "status.json").write_text(
+            json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _read_status(task_id: str):
+    """读取落盘的任务状态，不存在返回 None。"""
+    sf = OUTPUT_DIR / task_id / "status.json"
+    if not sf.is_file():
+        return None
+    try:
+        return json.loads(sf.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def recover_interrupted_tasks() -> int:
+    """
+    服务启动时调用：把上次遗留的 training 状态标记为 interrupted。
+    否则这些任务会永远显示"训练中"，前端一直转圈，学生以为程序卡死。
+    返回被标记的任务数。
+    """
+    if not OUTPUT_DIR.exists():
+        return 0
+    n = 0
+    for d in OUTPUT_DIR.iterdir():
+        if not d.is_dir():
+            continue
+        sf = d / "status.json"
+        if not sf.is_file():
+            continue
+        try:
+            st = json.loads(sf.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if st.get("status") == "training":
+            st["status"] = "interrupted"
+            st["error"] = "服务重启导致训练中断，请重新上传数据并提交训练"
+            st["updated_at"] = time.time()
+            try:
+                sf.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
+                n += 1
+            except Exception:
+                pass
+    return n
 
 
 class TrainRequest(BaseModel):
@@ -36,6 +95,11 @@ class TrainRequest(BaseModel):
     fe_opts: dict = Field(default_factory=dict, description="特征工程选项（缺失值策略/缩放/类别编码）")
     tune: bool = Field(False, description="是否对最优模型做超参调优（RandomizedSearchCV）")
     tune_budget: int = Field(20, description="RandomizedSearchCV 迭代次数上限（仅 tune=true 时生效）")
+    # None 表示跟随服务端默认（config.CV_ENABLED）；前端可显式关掉以缩短耗时
+    use_cv: Optional[bool] = Field(
+        None,
+        description="是否启用 K 折交叉验证；不传则跟随服务端默认配置",
+    )
 
 
 @router.get("/models")
@@ -94,15 +158,20 @@ def train(req: TrainRequest):
                 fe_opts=req.fe_opts or None,
                 tune=req.tune,
                 tune_budget=req.tune_budget,
+                use_cv=req.use_cv,
             )
+            _write_status(task_id, "completed",
+                          best_model=result["best_model"]["name"])
             with _LOCK:
                 _TASKS[task_id] = {"status": "completed", "result": result, "log": log}
         except Exception as e:
+            _write_status(task_id, "failed", error=str(e))
             with _LOCK:
                 _TASKS[task_id] = {"status": "failed", "error": str(e), "log": log}
 
     with _LOCK:
         _TASKS[task_id] = {"status": "training", "log": log}
+    _write_status(task_id, "training", target_col=req.target_col)
     threading.Thread(target=_run, daemon=True).start()
 
     return {
@@ -119,7 +188,7 @@ def get_task(task_id: str, log_cursor: int = 0):
     with _LOCK:
         task = _TASKS.get(task_id)
     if task is None:
-        # 可能已完成并已从内存清理，检查产物目录
+        # 服务重启后内存状态已清空：先查落盘的 status.json，再查 result.json
         out_dir = OUTPUT_DIR / task_id
         if (out_dir / "result.json").exists():
             result = json.loads((out_dir / "result.json").read_text(encoding="utf-8"))
@@ -132,6 +201,23 @@ def get_task(task_id: str, log_cursor: int = 0):
                     "total_time_sec": result["training_time_total_seconds"],
                 },
                 "log_lines": [], "next_cursor": 0,
+            }
+        st = _read_status(task_id)
+        if st is not None:
+            # interrupted（重启遗留）/ failed：明确告知，避免前端无限转圈
+            status = st.get("status", "unknown")
+            return {
+                "task_id": task_id,
+                "status": status,
+                "result_available": False,
+                "log_lines": [],
+                "next_cursor": 0,
+                "error": {
+                    "code": f"TASK_{status.upper()}",
+                    "message": st.get("error") or (
+                        "任务未产生结果，请重新提交训练" if status == "interrupted"
+                        else "任务已结束"),
+                },
             }
         raise HTTPException(status_code=404, detail="任务不存在")
 

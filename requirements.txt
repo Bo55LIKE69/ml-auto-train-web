@@ -2,6 +2,11 @@
 # Python 3.10 ~ 3.12 (64-bit) recommended
 # Install: pip install -r requirements.txt
 # Faster mirror: pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+#
+# 说明：下面所有依赖均为「一次性装全」，装完后 12 个模型、SHAP 可解释性、
+# Word/PDF 报告、在线预测全部可用。若某个包在你的机器上实在装不上，
+# 可单独删除该行 —— 程序会自动降级，并在界面「运行环境」处明确标注
+# 哪些功能不可用（不会静默少给你模型）。
 
 # ---- Web backend ----
 fastapi==0.115.6            # API framework with built-in Swagger docs
@@ -17,8 +22,22 @@ xlrd==2.0.1                 # required to read legacy .xls
 # ---- Machine learning (native sklearn, no AutoML libs) ----
 scikit-learn==1.5.2
 
+# ---- Boosting models (12 模型中的 3 个) ----
+xgboost==2.1.3              # XGBoost
+lightgbm==4.5.0             # LightGBM
+catboost==1.2.7             # CatBoost（体积较大，约 100MB；装不上可删此行）
+
+# ---- Model persistence (在线预测功能依赖) ----
+joblib==1.4.2
+
 # ---- Visualization ----
 matplotlib==3.9.2
+
+# ---- Explainability (SHAP 可解释性图) ----
+shap==0.46.0
+
+# ---- Report export (Word 七章报告 / PDF 导出) ----
+python-docx==1.1.2
 
 # ---- Testing ----
 pytest==8.3.4

@@ -9,7 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import STATIC_DIR, ensure_dirs
-from app.routers import ai, download, explore, predict, result, tasks, train, upload
+from app.routers import (ai, deps, download, explore, predict, result, tasks,
+                         train, upload)
 
 # 创建运行时目录（uploads / outputs / static）
 ensure_dirs()
@@ -31,12 +32,27 @@ app.add_middleware(
 # 注册接口路由（必须在静态挂载之前注册，否则会被 mount("/") 吞掉）
 app.include_router(upload.router)
 app.include_router(explore.router)
+app.include_router(deps.router)
 app.include_router(train.router)
 app.include_router(tasks.router)
 app.include_router(predict.router)
 app.include_router(download.router)
 app.include_router(ai.router)
 app.include_router(result.router)
+
+
+@app.on_event("startup")
+def _on_startup():
+    """
+    服务启动时回收上次遗留的「训练中」任务。
+    不处理的话，这些任务会永远停在 training，前端一直转圈。
+    """
+    try:
+        n = train.recover_interrupted_tasks()
+        if n:
+            print(f"[startup] 已将 {n} 个因重启中断的任务标记为 interrupted")
+    except Exception as e:
+        print(f"[startup] 中断任务回收失败（不影响服务）：{e}")
 
 
 @app.get("/api/health")

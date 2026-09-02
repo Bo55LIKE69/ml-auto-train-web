@@ -27,3 +27,24 @@ Thumbs.db
 
 # 日志
 *.log
+*.err
+
+# 项目内部数据 / 隐私（含本地 memory，切勿入库）
+.workbuddy/
+
+# 根目录临时产物
+_t_roc.png
+_tmp_pred_in.csv
+server_*.log
+server_*.err
+
+# 一次性调试脚本（开发过程中间产物，非项目资产）
+scripts/debug_*.py
+scripts/check_*.py
+scripts/add_predict_nav.py
+scripts/append_predict_css.py
+scripts/bump_ver_ui.py
+scripts/remove_header.py
+scripts/remove_stepper.py
+tests/debug_*.py
+tests/verify_v100_full.py

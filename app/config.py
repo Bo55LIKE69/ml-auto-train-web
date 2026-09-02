@@ -57,6 +57,18 @@ FALLBACK_MODEL_SET_SMALL = ["lr", "knn", "dt", "rf", "et", "gbc", "xgboost", "li
 # 第二次降级：只用最快的前三个
 FALLBACK_MODEL_SET_MINIMAL = ["lr", "dt", "rf"]
 
+# ========== 交叉验证（v1.2.0：真正执行 K 折 CV，不再只是记账字段）==========
+# CV_ENABLED：默认开启。毕设论文中「K 折交叉验证」为方法章节标配。
+CV_ENABLED = True
+# CV_MAX_SAMPLES：样本数超过此值时自动跳过 CV（12 模型 × K 折在大样本上极慢）
+CV_MAX_SAMPLES = 20_000
+# CV_MIN_SAMPLES：样本数少于此值时不建议 CV（每折样本太少，方差大）
+CV_MIN_SAMPLES = 20
+
+# ========== SVM 性能护栏 ==========
+# 样本数超过此值时 SVM 自动切线性核（RBF 在大样本上复杂度过高）
+SVM_LINEAR_THRESHOLD = 3_000
+
 # ========== 存储路径 ==========
 STORAGE_ROOT = OUTPUT_DIR
 DEMO_DATA_DIR = BASE_DIR / "demo-data"
@@ -105,6 +117,37 @@ SOFFICE_CANDIDATES = [
     r"C:\Program Files\LibreOffice\program\soffice.exe",
     r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
 ]
+
+
+# ========== 可选依赖清单（v1.2.0：依赖自检用，缺失时在界面明确提示）==========
+# key -> (pip 包名, import 模块名, 用途说明, 缺失后影响)
+OPTIONAL_DEPS = {
+    "xgboost":    ("xgboost", "xgboost", "XGBoost 模型", "12 模型降级为 11 个"),
+    "lightgbm":   ("lightgbm", "lightgbm", "LightGBM 模型", "12 模型降级为 11 个"),
+    "catboost":   ("catboost", "catboost", "CatBoost 模型", "12 模型降级为 11 个"),
+    "shap":       ("shap", "shap", "SHAP 可解释性分析", "不生成 shap_summary.png"),
+    "python-docx": ("python-docx", "docx", "Word 实验报告", "不生成 report.docx / report.pdf"),
+    "joblib":     ("joblib", "joblib", "模型持久化", "无法保存模型，在线预测不可用"),
+}
+
+
+def check_optional_deps() -> dict:
+    """
+    检查可选依赖是否可用。
+    返回 {key: {"available": bool, "purpose": str, "impact": str, "error": str|None}}
+    仅在需要时调用（如 /api/deps 或训练前），不阻塞启动。
+    """
+    import importlib
+    out = {}
+    for key, (pip_name, mod_name, purpose, impact) in OPTIONAL_DEPS.items():
+        try:
+            importlib.import_module(mod_name)
+            out[key] = {"available": True, "purpose": purpose,
+                        "impact": None, "error": None, "pip_name": pip_name}
+        except Exception as e:
+            out[key] = {"available": False, "purpose": purpose,
+                        "impact": impact, "error": str(e), "pip_name": pip_name}
+    return out
 
 
 def ensure_dirs():
