@@ -63,7 +63,18 @@
           <span class="sidebar-link-desc">历史任务记录</span>
         </span>
       </a>
+      <a class="sidebar-link" href="/predict.html">
+        <span class="sidebar-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+        <span class="sidebar-link-text">
+          <span class="sidebar-link-name">在线预测</span>
+          <span class="sidebar-link-desc">用已训模型预测新数据</span>
+        </span>
+      </a>
     </nav>
+    <div class="sidebar-env">
+      <div class="sidebar-section-label" style="padding:14px 10px 6px">运行环境</div>
+      <div class="env-list" id="envList"><span class="env-loading">检测中…</span></div>
+    </div>
     <div class="sidebar-footer">
       <span class="mono">v1.1.0</span>
       <small>FastAPI + scikit-learn</small>
@@ -114,6 +125,7 @@
     <div id="dataStats" class="stats-grid"></div>
 
     <h2>模型对比</h2>
+    <div id="modelChart" class="model-chart"></div>
     <div class="table-wrap">
       <table id="modelTable">
         <thead><tr id="modelHead"></tr></thead>
@@ -168,5 +180,6 @@
 </div><!-- /app-shell -->
 
 <script src="/js/result.js"></script>
+<script src="/js/sidebar.js"></script>
 </body>
 </html>

@@ -194,6 +194,9 @@ function render(r) {
       ${headers.map(h => `<td>${m.metrics[h] ?? "—"}</td>`).join("")}
     </tr>`).join("");
 
+  // 模型对比条状图
+  renderModelChart(r);
+
   // 最优模型框
   const bm = r.best_model;
   const metricStr = Object.entries(bm.metrics).filter(([, v]) => v !== null)
@@ -289,6 +292,41 @@ function showLoadingBar(taskId) {
 function hideLoadingBar() {
   const bar = document.getElementById("loadingBar");
   if (bar) bar.remove();
+}
+
+/* ---- 模型对比条状图：取主指标做横向柱状对比（最优高亮） ---- */
+function renderModelChart(r) {
+  const chart = document.getElementById("modelChart");
+  if (!chart) return;
+  const isClf = r.task_type === "classification";
+  const cands = isClf ? ["cv_mean", "f1", "accuracy"] : ["cv_mean", "r2"];
+  let key = null;
+  for (const c of cands) {
+    const v = r.best_model.metrics[c];
+    if (v != null && isFinite(v)) { key = c; break; }
+  }
+  if (!key) { chart.innerHTML = ""; return; }
+  const rows = r.models.map(m => ({ name: m.name, v: m.metrics[key] }))
+    .filter(x => x.v != null && isFinite(x.v))
+    .sort((a, b) => b.v - a.v);
+  if (!rows.length) { chart.innerHTML = ""; return; }
+  const max = Math.max(...rows.map(x => x.v), 1e-6);
+  const labelMap = { cv_mean: "交叉验证得分", f1: "F1 分数", accuracy: "准确率", r2: "R² 决定系数" };
+  const label = labelMap[key] || key;
+  chart.innerHTML = `<div class="mc-label" style="font-size:12px;color:var(--text-3);font-family:var(--font-mono);letter-spacing:.5px;margin-bottom:2px">${esc(label)}</div>` +
+    rows.map(x => {
+      const pct = Math.max(3, Math.min(100, (x.v / max) * 100));
+      const best = x.name === r.best_model.name;
+      return `<div class="mc-row">
+        <div class="mc-name ${best ? "best" : ""}" title="${esc(x.name)}">${esc(x.name)}${best ? " ★" : ""}</div>
+        <div class="mc-track"><div class="mc-fill ${best ? "best" : ""}" data-w="${pct.toFixed(1)}" style="width:0%"></div></div>
+        <div class="mc-val ${best ? "best" : ""}">${Number(x.v).toFixed(4)}</div>
+      </div>`;
+    }).join("");
+  // 下一帧再设宽度，触发生长动画
+  requestAnimationFrame(() => {
+    chart.querySelectorAll(".mc-fill").forEach(f => { f.style.width = f.dataset.w + "%"; });
+  });
 }
 
 function esc(s) {

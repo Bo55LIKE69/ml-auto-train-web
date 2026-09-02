@@ -47,6 +47,10 @@
         <span class="sidebar-link-text"><span class="sidebar-link-name">实验工作台</span><span class="sidebar-link-desc">历史任务与对比</span></span>
       </a>
     </nav>
+    <div class="sidebar-env">
+      <div class="sidebar-section-label" style="padding:14px 10px 6px">运行环境</div>
+      <div class="env-list" id="envList"><span class="env-loading">检测中…</span></div>
+    </div>
     <div class="sidebar-footer">
       <div class="sidebar-version">v1.1.0</div>
       <div class="sidebar-stack">FastAPI · sklearn · XGBoost · SHAP</div>
@@ -54,6 +58,7 @@
   </aside>
 
   <main class="app-main">
+  <div class="container">
     <header class="page-header">
       <div class="page-header-eyebrow">STEP · 推理</div>
       <h1 class="page-title">在线预测</h1>
@@ -115,8 +120,10 @@
         </table>
       </div>
     </section>
+  </div><!-- /container -->
   </main>
 </div>
 <script src="/js/predict.js"></script>
+<script src="/js/sidebar.js"></script>
 </body>
 </html>
