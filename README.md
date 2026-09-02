@@ -101,6 +101,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 .venv\Scripts\python -m pytest tests -v          # 单元测试
 .venv\Scripts\python tests\test_http_e2e.py      # HTTP 端到端（需服务已启动）
 .venv\Scripts\python tests\test_e2e_pipeline.py  # 训练流水线端到端
+.venv\Scripts\python scripts/verify_fixes.py     # 训练逻辑修复回归验证（异常隔离/真5折CV/超时降级/依赖自检等 24 项断言）
 ```
 
 ## 🛠️ 技术栈
